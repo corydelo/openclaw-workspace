@@ -4,52 +4,88 @@ Contract test for LLM-Architecture OpenAI-compatible endpoint.
 
 Assumes infra running at http://127.0.0.1:8000
 
-Env:
-  LLM_ARCH_BASE_URL (optional, default http://127.0.0.1:8000)
-  LLM_ARCH_API_KEY  (optional, if your server enforces auth)
+Env (can be set via shell OR via .env file in repo root):
+  LLM_ARCH_BASE_URL  (default http://127.0.0.1:8000)
+  ORACLE_API_KEY     (preferred)
+  LLM_ARCH_API_KEY   (fallback)
 """
-import os, sys, json
+
+import os
+import sys
+import json
 import urllib.request
+import urllib.error
+from pathlib import Path
 
-BASE_URL = os.environ.get("LLM_ARCH_BASE_URL", "http://127.0.0.1:8000")
-API_KEY = os.environ.get("LLM_ARCH_API_KEY")
+def load_dotenv(dotenv_path: str = ".env") -> None:
+    """
+    Minimal .env loader (KEY=VALUE lines). No external deps.
+    - Ignores blank lines and comments
+    - Removes surrounding quotes
+    - Does not overwrite already-set env vars
+    """
+    p = Path(dotenv_path)
+    if not p.exists():
+        return
+    for raw in p.read_text().splitlines():
+        line = raw.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        k, v = line.split("=", 1)
+        k = k.strip()
+        v = v.strip().strip('"').strip("'")
+        os.environ.setdefault(k, v)
 
-def post_json(path: str, payload: dict):
-    url = f"{BASE_URL}{path}"
+def post_json(base_url: str, path: str, payload: dict, headers: dict):
+    url = f"{base_url}{path}"
     data = json.dumps(payload).encode("utf-8")
-    headers = {"Content-Type": "application/json"}
-    if API_KEY:
-        headers["Authorization"] = f"Bearer {API_KEY}"
     req = urllib.request.Request(url, data=data, headers=headers, method="POST")
     with urllib.request.urlopen(req, timeout=30) as resp:
         return resp.status, resp.read().decode("utf-8")
 
 def main():
+    # Load repo-root .env (so `make contract-test` works cleanly)
+    load_dotenv(".env")
+
+    base_url = os.environ.get("LLM_ARCH_BASE_URL", "http://127.0.0.1:8000")
+    api_key = (
+        os.environ.get("ORACLE_API_KEY")
+        or os.environ.get("LLM_ARCH_API_KEY")
+        or os.environ.get("API_KEY")
+        or ""
+    )
+
+    headers = {"Content-Type": "application/json"}
+    if api_key:
+        headers["Authorization"] = f"Bearer {api_key}"
+
     payload = {
         "model": "oracle/auto",
         "messages": [{"role": "user", "content": "Reply with exactly: ok"}],
-        "stream": False
+        "stream": False,
     }
 
     try:
-        status, body = post_json("/v1/chat/completions", payload)
+        status, body = post_json(base_url, "/v1/chat/completions", payload, headers)
+    except urllib.error.HTTPError as e:
+        body = e.read().decode("utf-8", errors="replace")
+        print("FAIL: HTTP error from infra.")
+        print("Status:", e.code)
+        print("Reason:", e.reason)
+        print("Body:", body[:2000])
+        sys.exit(1)
     except Exception as e:
         print("FAIL: Could not reach infra OpenAI endpoint.")
-        print("Base URL:", BASE_URL)
+        print("Base URL:", base_url)
         print("Error:", repr(e))
         print("\nStart infra in another terminal:")
         print("  cd /Users/corydelouche/Codex/openclaw-workspace && make infra-up")
         sys.exit(1)
 
-    if status != 200:
-        print("FAIL: HTTP", status)
-        print(body[:2000])
-        sys.exit(1)
-
     try:
         obj = json.loads(body)
     except Exception:
-        print("FAIL: response not JSON")
+        print("FAIL: response was not JSON.")
         print(body[:2000])
         sys.exit(1)
 
@@ -67,18 +103,18 @@ def main():
 
     choice0 = obj["choices"][0]
     msg = choice0.get("message", {})
-    content = msg.get("content", "")
+    content = (msg.get("content") or "").strip()
+
+    if content.lower() != "ok":
+        print("FAIL: expected 'ok' content, got:", repr(content))
+        print(json.dumps(obj, indent=2)[:2000])
+        sys.exit(1)
 
     print("PASS: OpenAI-compat response received.")
-    if content:
-        print("INFO: content:", repr(content[:160]))
-    else:
-        print("WARN: no message.content found; first choice was:")
-        print(json.dumps(choice0, indent=2)[:2000])
-
+    print("Content:", repr(content))
     if "x_oracle" in obj:
         xo = obj["x_oracle"]
-        print("INFO: x_oracle:", {k: xo.get(k) for k in ("confidence", "tier_used", "cost_estimate")})
+        print("x_oracle:", {k: xo.get(k) for k in ("confidence", "tier_used", "cost_estimate")})
 
 if __name__ == "__main__":
     main()

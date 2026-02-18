@@ -1,4 +1,6 @@
-.PHONY: sync status up down contract-test e2e infra-up infra-down agent-up agent-down
+.PHONY: sync status up down smoke contract-test e2e infra-up infra-down agent-up agent-down prepare submodule-check
+
+SHELL := /bin/bash
 
 sync:
 	git submodule sync --recursive
@@ -10,29 +12,42 @@ status:
 
 # --- Infra (LLM-Architecture) ---
 infra-up:
-	cd infra && python3 -m venv venv && . venv/bin/activate && pip install -r requirements.txt
-	cd infra && . venv/bin/activate && uvicorn src.api.server:app --host 127.0.0.1 --port 8000
+	./bootstrap.sh infra-up
 
 infra-down:
-	@echo "Stop infra: press Ctrl+C in the terminal running uvicorn (or implement pkill later)."
+	./bootstrap.sh infra-down
 
 # --- Agent (Fortified OpenClaw deployment) ---
 agent-up:
-	cd agent/docker && docker-compose up -d
+	./bootstrap.sh agent-up
 
 agent-down:
-	cd agent/docker && docker-compose down
+	./bootstrap.sh agent-down
+
+prepare:
+	./bootstrap.sh prepare
+
+submodule-check:
+	@bad="$$(git submodule status --recursive | grep -E '^[+-U]' || true)"; \
+	if [ -n "$$bad" ]; then \
+		echo "Submodule pin mismatch detected:"; \
+		echo "$$bad"; \
+		exit 1; \
+	fi
 
 # --- System ---
-up: agent-up
-	@echo "NOTE: infra-up runs in the foreground. Run it in another terminal: make infra-up"
+up:
+	./bootstrap.sh up
 
-down: agent-down
-	@echo "NOTE: stop infra with Ctrl+C in its terminal (or implement infra-down later)."
+down:
+	./bootstrap.sh down
 
 # --- Tests ---
 contract-test:
-	python3 contract-tests/contract_test_openai_compat.py
+	./bootstrap.sh contract-test
+
+smoke:
+	./bootstrap.sh smoke
 
 e2e:
 	python3 e2e/smoke_e2e.py
