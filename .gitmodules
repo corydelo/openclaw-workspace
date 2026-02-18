@@ -1,6 +1,6 @@
 [submodule "agent"]
 	path = agent
-	url = https://github.com/corydelo/sturdy-journey.git
+	url = git@github.com:corydelo/sturdy-journey.git
 [submodule "infra"]
 	path = infra
-	url = https://github.com/corydelo/LLM-Architecture.git
+	url = git@github.com:corydelo/LLM-Architecture.git
