@@ -93,6 +93,8 @@ ensure_root_env() {
     cat >"$ROOT_ENV" <<EOF
 ORACLE_API_KEY=$(generate_oracle_key)
 LLM_ARCH_BASE_URL=http://127.0.0.1:8000
+WORKFLOW_APPROVAL_MODE=on-risk
+WORKFLOW_TOKEN_BUDGET=6000
 EOF
     echo "Created $ROOT_ENV"
   fi
@@ -108,11 +110,23 @@ EOF
     LLM_ARCH_BASE_URL="http://127.0.0.1:8000"
     upsert_env "$ROOT_ENV" "LLM_ARCH_BASE_URL" "$LLM_ARCH_BASE_URL"
   fi
+  if [[ -z "${WORKFLOW_APPROVAL_MODE:-}" ]]; then
+    WORKFLOW_APPROVAL_MODE="on-risk"
+    upsert_env "$ROOT_ENV" "WORKFLOW_APPROVAL_MODE" "$WORKFLOW_APPROVAL_MODE"
+  fi
+  if [[ -z "${WORKFLOW_TOKEN_BUDGET:-}" ]]; then
+    WORKFLOW_TOKEN_BUDGET="6000"
+    upsert_env "$ROOT_ENV" "WORKFLOW_TOKEN_BUDGET" "$WORKFLOW_TOKEN_BUDGET"
+  fi
 }
 
 ensure_infra_env() {
   touch "$INFRA_ENV"
   upsert_env "$INFRA_ENV" "API_KEYS" "${ORACLE_API_KEY}"
+  upsert_env "$INFRA_ENV" "API_AUTH_MODE" "${API_AUTH_MODE:-required}"
+  upsert_env "$INFRA_ENV" "API_AUTH_ALLOW_EMPTY_KEYS" "${API_AUTH_ALLOW_EMPTY_KEYS:-false}"
+  upsert_env "$INFRA_ENV" "WORKFLOW_APPROVAL_MODE" "${WORKFLOW_APPROVAL_MODE:-on-risk}"
+  upsert_env "$INFRA_ENV" "WORKFLOW_TOKEN_BUDGET" "${WORKFLOW_TOKEN_BUDGET:-6000}"
   if ! grep -q "^CLOUD_ONLY=" "$INFRA_ENV"; then
     upsert_env "$INFRA_ENV" "CLOUD_ONLY" "true"
   fi
@@ -197,15 +211,19 @@ start_infra() {
     return 0
   fi
 
+  local launched_pid
   (
     cd "$INFRA_DIR"
     # shellcheck disable=SC1090
     set -a && source "$INFRA_ENV" && set +a
-    exec "$INFRA_VENV/bin/uvicorn" src.api.server:app --host 127.0.0.1 --port 8000
-  ) >"$INFRA_LOG_FILE" 2>&1 &
-  local launched_pid
-  launched_pid="$!"
-  echo "$launched_pid" >"$INFRA_PID_FILE"
+    nohup "$INFRA_VENV/bin/uvicorn" src.api.server:app --host 127.0.0.1 --port 8000 >"$INFRA_LOG_FILE" 2>&1 &
+    launched_pid="$!"
+    echo "$launched_pid" >"$INFRA_PID_FILE"
+    printf '%s\n' "$launched_pid"
+  ) >"$ROOT_DIR/.infra.launch.out"
+
+  launched_pid="$(tail -n 1 "$ROOT_DIR/.infra.launch.out" 2>/dev/null || true)"
+  rm -f "$ROOT_DIR/.infra.launch.out"
 
   # Catch immediate bind/crash failure before readiness loop.
   sleep 1
@@ -347,7 +365,7 @@ case "$cmd" in
   infra-down) stop_infra ;;
   agent-up) prepare; start_agent ;;
   agent-down) stop_agent ;;
-  contract-test) ensure_root_env; run_contract_test ;;
+  contract-test) ensure_root_env; ensure_infra_env; install_infra_deps; start_infra; run_contract_test ;;
   smoke) run_smoke ;;
   up) up_all ;;
   down) down_all ;;
