@@ -1,0 +1,24 @@
+[
+  {
+    "id": "cf-example-001",
+    "title": "Code Factory smoke task",
+    "story_type": "feature",
+    "description": "Exercise writer -> preflight -> reviewer -> ship loop with a deterministic no-op command.",
+    "status": "pending",
+    "changed_files": [
+      "docs/code-factory-smoke.md"
+    ],
+    "implementation": {
+      "type": "command",
+      "command": "printf 'code-factory-smoke\n'"
+    },
+    "ship": {
+      "mode": "report_only",
+      "target_branch": "main"
+    },
+    "queue": {
+      "max_retries": 2,
+      "claim_ttl_sec": 900
+    }
+  }
+]

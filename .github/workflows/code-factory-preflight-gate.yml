@@ -1,0 +1,87 @@
+name: code-factory-preflight-gate
+
+on:
+  pull_request:
+    paths:
+      - ".code-factory.yaml"
+      - ".code-factory.schema.json"
+      - "scripts/**"
+      - "infra/**"
+      - "tasks/**"
+      - "docs/**"
+      - ".github/workflows/code-factory-preflight-gate.yml"
+  push:
+    branches:
+      - main
+      - master
+    paths:
+      - ".code-factory.yaml"
+      - ".code-factory.schema.json"
+      - "scripts/**"
+      - "infra/**"
+      - "tasks/**"
+      - "docs/**"
+      - ".github/workflows/code-factory-preflight-gate.yml"
+
+jobs:
+  preflight_gate:
+    name: preflight_gate
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Resolve changed files
+        id: changed
+        shell: bash
+        run: |
+          set -euo pipefail
+          BASE_SHA=""
+          if [[ "${{ github.event_name }}" == "pull_request" ]]; then
+            BASE_SHA="${{ github.event.pull_request.base.sha }}"
+          elif [[ -n "${{ github.event.before }}" && "${{ github.event.before }}" != "0000000000000000000000000000000000000000" ]]; then
+            BASE_SHA="${{ github.event.before }}"
+          fi
+
+          if [[ -n "${BASE_SHA}" ]]; then
+            git diff --name-only "${BASE_SHA}"...HEAD > .changed-files.txt
+          else
+            git diff --name-only HEAD~1...HEAD > .changed-files.txt || true
+          fi
+
+          echo "changed_count=$(wc -l < .changed-files.txt | tr -d ' ')" >> "${GITHUB_OUTPUT}"
+
+      - name: Run deterministic preflight gate
+        id: preflight
+        shell: bash
+        run: |
+          set -euo pipefail
+          mapfile -t CHANGED_FILES < .changed-files.txt
+          if [[ "${#CHANGED_FILES[@]}" -eq 0 ]]; then
+            ./scripts/preflight.sh | tee /tmp/preflight.out
+          else
+            ./scripts/preflight.sh "${CHANGED_FILES[@]}" | tee /tmp/preflight.out
+          fi
+
+          REPORT_PATH="$(awk -F: '/^preflight_report:/{print $2}' /tmp/preflight.out | tail -n1 | xargs)"
+          if [[ -z "${REPORT_PATH}" ]]; then
+            echo "preflight_report path not found in preflight output"
+            exit 1
+          fi
+          echo "report_path=${REPORT_PATH}" >> "${GITHUB_OUTPUT}"
+
+      - name: Upload preflight report artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: preflight-gate-report-${{ github.run_id }}
+          path: ${{ steps.preflight.outputs.report_path }}
+          if-no-files-found: warn
+          retention-days: 14

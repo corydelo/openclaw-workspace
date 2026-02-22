@@ -84,21 +84,18 @@ upsert_env() {
     { print }
     END { if (!found) print k "=" v }
   ' "$file" >"$tmp_file"
-  mv "$tmp_file" "$file"
+  cat "$tmp_file" > "$file"
+  rm "$tmp_file"
 }
 
 ensure_root_env() {
   mkdir -p "$ROOT_DIR"
   if [[ ! -f "$ROOT_ENV" ]]; then
-    cat >"$ROOT_ENV" <<EOF
-ORACLE_API_KEY=$(generate_oracle_key)
-LLM_ARCH_BASE_URL=http://127.0.0.1:8000
-WORKFLOW_APPROVAL_MODE=on-risk
-WORKFLOW_TOKEN_BUDGET=6000
-EOF
-    echo "Created $ROOT_ENV"
+    touch "$ROOT_ENV"
   fi
 
+  export TMPDIR="$PWD/.tmp"
+  mkdir -p "$TMPDIR"
   # shellcheck disable=SC1090
   set -a && source "$ROOT_ENV" && set +a
 
@@ -130,6 +127,32 @@ ensure_infra_env() {
   if ! grep -q "^CLOUD_ONLY=" "$INFRA_ENV"; then
     upsert_env "$INFRA_ENV" "CLOUD_ONLY" "true"
   fi
+
+  # Optional Venice routing settings: if set in root env or shell, propagate
+  # to infra/.env so router + provider share one source of truth.
+  local venice_keys=(
+    "VENICE_API_KEY"
+    "VENICE_DIEM_STAKE"
+    "VENICE_CHEAP_MODEL"
+    "VENICE_BASE_MODEL"
+    "VENICE_FRONTIER_MODEL"
+    "VENICE_FRONTIER_REASONING_MODEL"
+    "VENICE_FRONTIER_CODING_MODEL"
+    "VENICE_API_BASE_URL"
+    "VENICE_BURN_ENABLED"
+    "VENICE_DAILY_TOKEN_BUDGET"
+    "VENICE_BURN_RESERVE_TOKENS"
+    "VENICE_RESET_HOUR_LOCAL"
+    "VENICE_BURN_FORCE_PROFILE"
+    "VENICE_BURN_FALLBACK_PROFILE"
+    "VENICE_BURN_STATE_FILE"
+  )
+  local venice_key
+  for venice_key in "${venice_keys[@]}"; do
+    if [[ -n "${!venice_key:-}" ]]; then
+      upsert_env "$INFRA_ENV" "$venice_key" "${!venice_key}"
+    fi
+  done
 }
 
 ensure_agent_env() {
@@ -160,10 +183,86 @@ ensure_agent_env() {
 
 sync_submodules() {
   git -C "$ROOT_DIR" submodule sync --recursive
+  local dirty_paths
+  dirty_paths="$(submodule_dirty_paths)"
+  if strict_submodule_pins_enabled; then
+    if [[ -n "$dirty_paths" ]]; then
+      echo "ERROR: STRICT_SUBMODULE_PINS is enabled and submodules are dirty:" >&2
+      while IFS= read -r path; do
+        [[ -n "$path" ]] && echo "  - $path" >&2
+      done <<< "$dirty_paths"
+      echo "Commit/stash submodule changes or disable STRICT_SUBMODULE_PINS for local dev." >&2
+      exit 1
+    fi
+    git -C "$ROOT_DIR" submodule update --init --recursive
+    return 0
+  fi
+
+  if [[ -n "$dirty_paths" ]]; then
+    echo "Skipping submodule update due local changes in:" >&2
+    while IFS= read -r path; do
+      [[ -n "$path" ]] && echo "  - $path" >&2
+    done <<< "$dirty_paths"
+    return 0
+  fi
   git -C "$ROOT_DIR" submodule update --init --recursive
 }
 
+submodule_dirty_paths() {
+  local path
+  while IFS= read -r path; do
+    [[ -z "$path" ]] && continue
+    if [[ -n "$(git -C "$ROOT_DIR/$path" status --short 2>/dev/null || true)" ]]; then
+      echo "$path"
+    fi
+  done < <(git -C "$ROOT_DIR" config --file .gitmodules --get-regexp path | awk '{print $2}')
+}
+
+truthy() {
+  local value="${1:-}"
+  value="$(printf '%s' "$value" | tr '[:upper:]' '[:lower:]')"
+  case "$value" in
+    1|true|yes|on)
+      return 0
+      ;;
+    *)
+      return 1
+      ;;
+  esac
+}
+
+strict_submodule_pins_enabled() {
+  if truthy "${STRICT_SUBMODULE_PINS:-}"; then
+    return 0
+  fi
+  if truthy "${CI:-}"; then
+    return 0
+  fi
+  return 1
+}
+
 verify_submodule_pins() {
+  if strict_submodule_pins_enabled; then
+    local strict_bad
+    strict_bad="$(git -C "$ROOT_DIR" submodule status --recursive | grep -E '^[+-U]' || true)"
+    if [[ -n "$strict_bad" ]]; then
+      echo "ERROR: STRICT_SUBMODULE_PINS failed; submodule pins do not match committed SHAs:" >&2
+      echo "$strict_bad" >&2
+      exit 1
+    fi
+    return 0
+  fi
+
+  local dirty_paths
+  dirty_paths="$(submodule_dirty_paths)"
+  if [[ -n "$dirty_paths" ]]; then
+    echo "Skipping submodule pin verification due local changes in:" >&2
+    while IFS= read -r path; do
+      [[ -n "$path" ]] && echo "  - $path" >&2
+    done <<< "$dirty_paths"
+    return 0
+  fi
+
   local bad
   bad="$(git -C "$ROOT_DIR" submodule status --recursive | grep -E '^[+-U]' || true)"
   if [[ -n "$bad" ]]; then

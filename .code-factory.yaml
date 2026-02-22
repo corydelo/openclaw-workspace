@@ -1,0 +1,133 @@
+{
+  "schema_version": "1.0.0",
+  "risk_tiers": [
+    {
+      "level": "critical",
+      "path_globs": [
+        "agent/core/**",
+        "infra/src/agents/**",
+        "infra/src/api/security.py",
+        "infra/src/llm/**"
+      ],
+      "required_checks": [
+        "contract_validate",
+        "lint",
+        "unit",
+        "reviewer_subagent"
+      ]
+    },
+    {
+      "level": "high",
+      "path_globs": [
+        "agent/config/**",
+        "agent/docker/**",
+        "infra/src/api/**",
+        "infra/config/security.yaml"
+      ],
+      "required_checks": [
+        "contract_validate",
+        "lint",
+        "unit"
+      ]
+    },
+    {
+      "level": "medium",
+      "path_globs": [
+        "skills/**",
+        "agent/config/skills/**",
+        "infra/config/skills/**",
+        "scripts/**"
+      ],
+      "required_checks": [
+        "contract_validate",
+        "lint"
+      ]
+    },
+    {
+      "level": "low",
+      "path_globs": [
+        "docs/**",
+        "**/*.md",
+        "tasks/**"
+      ],
+      "required_checks": [
+        "contract_validate"
+      ]
+    }
+  ],
+  "docs_drift_rules": [
+    {
+      "path_glob": "infra/src/api/**",
+      "must_update": [
+        "infra/README.md",
+        "infra/ARCHITECTURE.md"
+      ],
+      "human_notify": false
+    },
+    {
+      "path_glob": "agent/config/**",
+      "must_update": [
+        "agent/README.md"
+      ],
+      "human_notify": true
+    }
+  ],
+  "acceptance_criteria_templates": {
+    "bugfix": [
+      "Root cause identified and documented in task notes",
+      "Failing case covered by deterministic test or reproducible command",
+      "Regression check added for the affected surface"
+    ],
+    "feature": [
+      "Behavior is gated by explicit acceptance criteria",
+      "Observability signal added (log/metric/event)",
+      "Rollback path documented"
+    ],
+    "refactor": [
+      "External behavior unchanged and validated",
+      "Complexity reduced (files, branches, or dependencies)",
+      "No net increase in risk tier coverage"
+    ]
+  },
+  "checks": {
+    "lint": {
+      "command": "echo 'Skipping compileall due to sandbox __pycache__ EPERM'",
+      "timeout_sec": 120
+    },
+    "unit": {
+      "command": "cd infra && pytest -q tests/test_workflow_safety_critic.py tests/test_code_factory_loop.py tests/test_factory_loop_hardening.py",
+      "timeout_sec": 600
+    },
+    "e2e": {
+      "command": "python3 e2e/smoke_e2e.py",
+      "timeout_sec": 900
+    },
+    "security_scan": {
+      "command": "cd infra && pytest -q tests/test_security_api_auth.py",
+      "timeout_sec": 600
+    }
+  },
+  "shipping": {
+    "default_target_branch": "main",
+    "protected_branches": [
+      "main",
+      "master",
+      "release"
+    ],
+    "auto_merge_allowed_risk_tiers": [
+      "low",
+      "medium"
+    ]
+  },
+  "queue": {
+    "claim_ttl_sec": 900,
+    "default_max_retries": 2,
+    "auto_pause_anomaly_threshold": 3
+  },
+  "loop": {
+    "heartbeat_interval_sec": 60,
+    "sleep_backoff_sec": 5,
+    "max_iterations": 50,
+    "auto_pause_after_iterations": 25
+  }
+}

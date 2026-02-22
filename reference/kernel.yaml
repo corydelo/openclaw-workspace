@@ -1,0 +1,18 @@
+version: "1.0"
+description: "Core kernel for openclaw agent maintenance and reweave bounding."
+reliability_slice:
+  validation:
+    schema_registry: "./schema"
+    quarantine_path: "ops/queue/quarantine"
+    verify_on_write: true
+    confidence_threshold: 0.95
+  reweave_queue:
+    max_items: 50
+    process_interval_minutes: 60
+    ttl: "72h"
+    last-reweaved: null
+  inputs:
+    - "memory-maintenance"
+    - "direct-note-write"
+  outputs:
+    - "verified-artifacts"

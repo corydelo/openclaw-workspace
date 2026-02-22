@@ -1,0 +1,10 @@
+[
+    {
+        "id": "1",
+        "status": "quarantine",
+        "inputs": [],
+        "outputs": {},
+        "confidence": 0.0,
+        "last-reweaved": "1970-01-01T00:00:00Z"
+    }
+]

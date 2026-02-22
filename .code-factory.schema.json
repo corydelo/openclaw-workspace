@@ -1,0 +1,180 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "risk_tiers",
+    "docs_drift_rules",
+    "acceptance_criteria_templates",
+    "checks",
+    "loop"
+  ],
+  "properties": {
+    "schema_version": {
+      "type": "string"
+    },
+    "risk_tiers": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": [
+          "level",
+          "path_globs",
+          "required_checks"
+        ],
+        "properties": {
+          "level": {
+            "type": "string",
+            "enum": [
+              "low",
+              "medium",
+              "high",
+              "critical"
+            ]
+          },
+          "path_globs": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "type": "string"
+            }
+          },
+          "required_checks": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    },
+    "docs_drift_rules": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "path_glob",
+          "must_update",
+          "human_notify"
+        ],
+        "properties": {
+          "path_glob": {
+            "type": "string"
+          },
+          "must_update": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "type": "string"
+            }
+          },
+          "human_notify": {
+            "type": "boolean"
+          }
+        }
+      }
+    },
+    "acceptance_criteria_templates": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      }
+    },
+    "checks": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "required": [
+          "command",
+          "timeout_sec"
+        ],
+        "properties": {
+          "command": {
+            "type": "string"
+          },
+          "timeout_sec": {
+            "type": "integer",
+            "minimum": 1
+          }
+        }
+      }
+    },
+    "shipping": {
+      "type": "object",
+      "properties": {
+        "default_target_branch": {
+          "type": "string"
+        },
+        "protected_branches": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "string"
+          }
+        },
+        "auto_merge_allowed_risk_tiers": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "string",
+            "enum": [
+              "low",
+              "medium",
+              "high",
+              "critical"
+            ]
+          }
+        }
+      }
+    },
+    "queue": {
+      "type": "object",
+      "properties": {
+        "claim_ttl_sec": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "default_max_retries": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "auto_pause_anomaly_threshold": {
+          "type": "integer",
+          "minimum": 1
+        }
+      }
+    },
+    "loop": {
+      "type": "object",
+      "required": [
+        "heartbeat_interval_sec",
+        "sleep_backoff_sec",
+        "max_iterations",
+        "auto_pause_after_iterations"
+      ],
+      "properties": {
+        "heartbeat_interval_sec": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "sleep_backoff_sec": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "max_iterations": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "auto_pause_after_iterations": {
+          "type": "integer",
+          "minimum": 1
+        }
+      }
+    }
+  }
+}

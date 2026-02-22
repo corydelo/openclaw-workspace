@@ -24,3 +24,5 @@ Treat this repo as the source of truth for running the full system:
 - Fix infra issues in ./infra (open PR in infra repo).
 - Fix agent issues in ./agent (open PR in agent repo).
 - Update this repo only to bump pinned submodule SHAs + integration tests.
+- When a user asks to update a specific file/domain, edit ONLY the corresponding file and nothing else.
+- In every change response, list changed files explicitly.

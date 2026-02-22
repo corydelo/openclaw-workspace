@@ -1,4 +1,4 @@
-.PHONY: sync status up down smoke contract-test e2e infra-up infra-down agent-up agent-down prepare submodule-check agent-drift-check
+.PHONY: sync status up down smoke contract-test e2e infra-up infra-down agent-up agent-down prepare submodule-check agent-drift-check venice-models preflight factory-loop
 
 SHELL := /bin/bash
 
@@ -12,20 +12,20 @@ status:
 
 # --- Infra (LLM-Architecture) ---
 infra-up:
-	./bootstrap.sh infra-up
+	bash ./bootstrap.sh infra-up
 
 infra-down:
-	./bootstrap.sh infra-down
+	bash ./bootstrap.sh infra-down
 
 # --- Agent (Fortified OpenClaw deployment) ---
 agent-up:
-	./bootstrap.sh agent-up
+	bash ./bootstrap.sh agent-up
 
 agent-down:
-	./bootstrap.sh agent-down
+	bash ./bootstrap.sh agent-down
 
 prepare:
-	./bootstrap.sh prepare
+	bash ./bootstrap.sh prepare
 
 submodule-check:
 	@bad="$$(git submodule status --recursive | grep -E '^[+-U]' || true)"; \
@@ -61,17 +61,26 @@ agent-drift-check:
 
 # --- System ---
 up:
-	./bootstrap.sh up
+	bash ./bootstrap.sh up
 
 down:
-	./bootstrap.sh down
+	bash ./bootstrap.sh down
 
 # --- Tests ---
 contract-test:
-	./bootstrap.sh contract-test
+	LLM_ARCH_BASE_URL="$${LLM_ARCH_BASE_URL:-http://127.0.0.1:8000}" python3 contract-tests/contract_test_openai_compat.py
 
 smoke:
-	./bootstrap.sh smoke
+	bash ./bootstrap.sh smoke
 
 e2e:
 	python3 e2e/smoke_e2e.py
+
+venice-models:
+	bash ./infra/scripts/list-venice-models.sh text
+
+preflight:
+	./scripts/preflight.sh
+
+factory-loop:
+	cd infra && python3 -m src.agents.factory_loop --tasks ../tasks/tasks.json
