@@ -61,6 +61,15 @@ make e2e
 make down
 ```
 
+## Subsystems & Capabilities
+- **Prompt Caching**: The `OrchestratorAgent` utilizes Prompt Caching Architecture v2 (ID-056) to optimize LLM calls.
+- **System Governance (Thread 6)**: The system enforces terminal states for governance artifacts, requiring ledger entries for accepted changes and utilizing refusal language for missing terminal artifacts.
+- **Security & Autonomy**: The agent architecture includes a dedicated security review subsystem, Docker isolation for runtime evaluation, and an autonomous learning loop with context drift detection.
+- **Execution Topology**: The execution flow relies on a localized Graph Orchestrator, Execution Dispatcher, and Code Factory Loop synced between the agent codebase and `llm-architecture`.
+
+## Cost & Routing Strategy
+The workspace utilizes a Venice burn configuration with a daily token budget of 0 (letting Venice enforce the quota). It falls back to the `eco` profile to prioritize free and then cheaper API tiers.
+
 ## Living-Doc Maintenance
 Update this file whenever:
 - Makefile targets change semantics.
