@@ -63,9 +63,25 @@ spec:
             - name: ollama-data
               mountPath: /root/.ollama
           resources:
+            requests:
+              cpu: "500m"
+              memory: "2Gi"
             limits:
               cpu: "4.0"
               memory: "16Gi"
+          livenessProbe:
+            httpGet:
+              path: /api/version
+              port: 11434
+            initialDelaySeconds: 30
+            periodSeconds: 15
+            timeoutSeconds: 5
+          readinessProbe:
+            httpGet:
+              path: /api/version
+              port: 11434
+            initialDelaySeconds: 10
+            periodSeconds: 10
       volumes:
         - name: ollama-data
           persistentVolumeClaim:
@@ -110,9 +126,22 @@ spec:
             - name: chroma-data
               mountPath: /chroma/chroma
           resources:
+            requests:
+              cpu: "250m"
+              memory: "512Mi"
             limits:
               cpu: "1.0"
               memory: "2Gi"
+          livenessProbe:
+            tcpSocket:
+              port: 8000
+            initialDelaySeconds: 15
+            periodSeconds: 15
+          readinessProbe:
+            tcpSocket:
+              port: 8000
+            initialDelaySeconds: 5
+            periodSeconds: 10
       volumes:
         - name: chroma-data
           persistentVolumeClaim:
@@ -147,19 +176,25 @@ spec:
       containers:
         - name: openclaw-gateway
           image: ghcr.io/phioranex/openclaw-docker:latest
-          command: ["gateway", "--port", "18789"]
+          args: ["gateway", "--port", "18789", "--allow-unconfigured"]
           ports:
             - containerPort: 18789
           envFrom:
             - configMapRef:
                 name: openclaw-config
+            - secretRef:
+                name: openclaw-secrets
           volumeMounts:
             - name: openclaw-workspace
               mountPath: /home/node/.openclaw/workspace
           resources:
+            requests:
+              cpu: "250m"
+              memory: "512Mi"
             limits:
               cpu: "2.0"
               memory: "4Gi"
+
       volumes:
         - name: openclaw-workspace
           persistentVolumeClaim:

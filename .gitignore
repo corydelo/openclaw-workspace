@@ -7,3 +7,4 @@ dist/
 build/
 .venv/
 logs/
+k8s/04-secrets.yaml
