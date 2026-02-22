@@ -7,4 +7,10 @@ dist/
 build/
 .venv/
 logs/
-k8s/04-secrets.yaml
+
+# Runtime artifacts
+.infra.log
+.infra.pid
+
+# Deferred k8s local secret copy (never commit)
+k8s-deferred-20260222/04-secrets.yaml
