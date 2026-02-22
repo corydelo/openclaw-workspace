@@ -3,3 +3,9 @@
 **/examples/**
 **/*.md
 !CLAUDE.md
+**/__pycache__/**
+**/venv/**
+**/data/**
+.infra.log
+.infra.pid
+*.pyc

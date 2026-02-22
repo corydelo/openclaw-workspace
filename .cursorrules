@@ -1,0 +1,20 @@
+# Project Rules for AI Assistants
+
+You are operating within the `openclaw-workspace` integration repository.
+
+## Roles and Responsibilities
+- **Integration Harness**: This repo is the source of truth for bringing up the entire system. Do not edit submodule code directly unless specifically instructed. Instead, navigate to the submodule (`./infra` or `./agent`) and operate from there.
+- **Contract Testing**: All multi-agent boundaries must be enforced via test. Write the failing test first.
+
+## Coding Standards
+- **Python**: Use `pytest`. Type hinting is mandatory (Pydantic V2).
+- **Scripts**: Always run `shellcheck` when writing bash scripts.
+
+## Knowledge Management
+- Read `ARCHITECTURE.md` for the overarching system design.
+- Read `DEVELOPER_GUIDE.md` for tooling quirks, testing instructions, and environment setup.
+- Read `AGENTS.md` for multi-agent interaction rules.
+- If you discover a significant gap, technical debt, or missing implementation out of scope for your task, do not blindly fix it. Instead, document it in `KNOWN_DRIFT.md` and move on.
+
+## Thread Governance
+- Ensure terminal artifacts are produced and handoff ledgers are updated before concluding.
