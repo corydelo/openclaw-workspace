@@ -28,6 +28,6 @@ Treat this repo as the source of truth for running the full system:
 - In every change response, list changed files explicitly.
 - **Governance Handoffs**: When executing a workflow thread (e.g., Thread 5 Intake or Thread 6 Governance), agents MUST produce the required terminal artifacts and update handoff ledgers before concluding.
 - **Submodule Discipline**: Agents must aggressively monitor and clear Git submodule locks when working across `infra` and `agent` boundaries. Any missing modules in `infra` should be mirrored to `llm-architecture`.
-- **System Diagnostics**: Agents should utilize the `/system check` command to trigger the `.antigravity/workflows/system-check.md` sequence.
+- **System Diagnostics**: Agents should run `/Users/corydelouche/Codex/scripts/system-check.sh` for the canonical system-check sequence.
 - **Infrastructure Health**: When diagnosing offline services, explicitly verify that Docker healthchecks in `docker-compose.yml` (e.g., Ollama, ChromaDB, Signal) use commands compatible with the container's available tools.
 - **Out-of-Scope Drift**: If you encounter missing implementations or technical debt that are out of scope for your current task, do not attempt to fix them blindly. Document the issue in `KNOWN_DRIFT.md` and proceed with your primary objective.
