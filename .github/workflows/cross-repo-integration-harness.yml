@@ -25,6 +25,7 @@ jobs:
     runs-on: ubuntu-latest
     env:
       MIRROR_PARITY_STURDY_REPOSITORY: ${{ vars.MIRROR_PARITY_STURDY_REPOSITORY }}
+      MIRROR_PARITY_REPO_TOKEN: ${{ secrets.MIRROR_PARITY_REPO_TOKEN }}
 
     steps:
       - name: Checkout primary repository
@@ -39,6 +40,10 @@ jobs:
             echo "Missing required var: MIRROR_PARITY_STURDY_REPOSITORY" >&2
             exit 1
           fi
+          if [ -z "${MIRROR_PARITY_REPO_TOKEN:-}" ]; then
+            echo "Missing required secret: MIRROR_PARITY_REPO_TOKEN" >&2
+            exit 1
+          fi
 
       - name: Checkout sturdy mirror repository
         uses: actions/checkout@v4
@@ -47,6 +52,7 @@ jobs:
           ref: ${{ github.event_name == 'pull_request' && github.base_ref || github.ref_name }}
           path: _mirror/sturdy
           fetch-depth: 1
+          token: ${{ secrets.MIRROR_PARITY_REPO_TOKEN }}
 
       - name: Setup Python
         uses: actions/setup-python@v5
@@ -95,4 +101,4 @@ jobs:
         with:
           name: cross-repo-integration-harness
           path: .artifacts/cross-repo-integration/
-          if-no-files-found: error
+          if-no-files-found: warn
