@@ -1,0 +1,98 @@
+name: Cross-Repo Integration Harness
+
+on:
+  pull_request:
+    paths:
+      - "bootstrap.sh"
+      - "contract-tests/**"
+      - "agent/scripts/test-openclaw-http-contract.sh"
+      - "agent/scripts/check-mirror-parity.sh"
+      - ".github/workflows/cross-repo-integration-harness.yml"
+  push:
+    branches:
+      - main
+      - master
+    paths:
+      - "bootstrap.sh"
+      - "contract-tests/**"
+      - "agent/scripts/test-openclaw-http-contract.sh"
+      - "agent/scripts/check-mirror-parity.sh"
+      - ".github/workflows/cross-repo-integration-harness.yml"
+  workflow_dispatch:
+
+jobs:
+  cross-repo-integration:
+    runs-on: ubuntu-latest
+    env:
+      MIRROR_PARITY_STURDY_REPOSITORY: ${{ vars.MIRROR_PARITY_STURDY_REPOSITORY }}
+
+    steps:
+      - name: Checkout primary repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Validate mirror configuration
+        run: |
+          set -euo pipefail
+          if [ -z "${MIRROR_PARITY_STURDY_REPOSITORY:-}" ]; then
+            echo "Missing required var: MIRROR_PARITY_STURDY_REPOSITORY" >&2
+            exit 1
+          fi
+
+      - name: Checkout sturdy mirror repository
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ vars.MIRROR_PARITY_STURDY_REPOSITORY }}
+          ref: ${{ github.event_name == 'pull_request' && github.base_ref || github.ref_name }}
+          path: _mirror/sturdy
+          fetch-depth: 1
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Run one-job integration harness
+        shell: bash
+        run: |
+          set -euo pipefail
+          ARTIFACT_DIR="$GITHUB_WORKSPACE/.artifacts/cross-repo-integration"
+          SUMMARY_FILE="$ARTIFACT_DIR/summary.md"
+          mkdir -p "$ARTIFACT_DIR"
+
+          {
+            echo "# Cross-Repo Integration Harness Summary"
+            echo
+            echo "- generated_at_utc: $(date -u +"%Y-%m-%dT%H:%M:%SZ")"
+            echo
+            echo "## Checks"
+          } > "$SUMMARY_FILE"
+
+          run_check() {
+            local name="$1"
+            shift
+            local log_file="$ARTIFACT_DIR/${name}.log"
+
+            echo "running:${name}"
+            if "$@" 2>&1 | tee "$log_file"; then
+              echo "- PASS: ${name}" >> "$SUMMARY_FILE"
+            else
+              echo "- FAIL: ${name}" >> "$SUMMARY_FILE"
+              return 1
+            fi
+          }
+
+          run_check "infra_contract_test" bash ./bootstrap.sh contract-test
+          run_check "factory_preflight_contract_gate_agent" bash ./agent/scripts/test-openclaw-http-contract.sh
+          run_check "factory_preflight_contract_gate_sturdy" bash "$GITHUB_WORKSPACE/_mirror/sturdy/scripts/test-openclaw-http-contract.sh"
+          run_check "mirror_parity_agent_to_sturdy" bash ./agent/scripts/check-mirror-parity.sh "$GITHUB_WORKSPACE/_mirror/sturdy"
+          run_check "mirror_parity_sturdy_to_agent" bash "$GITHUB_WORKSPACE/_mirror/sturdy/scripts/check-mirror-parity.sh" "$GITHUB_WORKSPACE/agent"
+
+      - name: Upload integration harness artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cross-repo-integration-harness
+          path: .artifacts/cross-repo-integration/
+          if-no-files-found: error
