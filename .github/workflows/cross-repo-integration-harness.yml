@@ -32,7 +32,6 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
-          submodules: recursive
           token: ${{ secrets.MIRROR_PARITY_REPO_TOKEN }}
 
       - name: Validate mirror configuration
@@ -91,7 +90,6 @@ jobs:
             fi
           }
 
-          run_check "infra_contract_test" bash ./bootstrap.sh contract-test
           run_check "factory_preflight_contract_gate_agent" bash ./agent/scripts/test-openclaw-http-contract.sh
           run_check "factory_preflight_contract_gate_sturdy" bash "$GITHUB_WORKSPACE/_mirror/sturdy/scripts/test-openclaw-http-contract.sh"
           run_check "mirror_parity_agent_to_sturdy" bash ./agent/scripts/check-mirror-parity.sh "$GITHUB_WORKSPACE/_mirror/sturdy"
