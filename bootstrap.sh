@@ -77,7 +77,7 @@ upsert_env() {
   local key="$2"
   local value="$3"
   local tmp_file
-  tmp_file="$(mktemp)"
+  tmp_file="$(mktemp /tmp/bootstrap.XXXXXX)"
   awk -v k="$key" -v v="$value" '
     BEGIN { found=0 }
     $0 ~ ("^" k "=") { print k "=" v; found=1; next }
