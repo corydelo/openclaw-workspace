@@ -31,3 +31,11 @@ Treat this repo as the source of truth for running the full system:
 - **System Diagnostics**: Agents should run `/Users/corydelouche/Codex/scripts/system-check.sh` for the canonical system-check sequence.
 - **Infrastructure Health**: When diagnosing offline services, explicitly verify that Docker healthchecks in `docker-compose.yml` (e.g., Ollama, ChromaDB, Signal) use commands compatible with the container's available tools.
 - **Out-of-Scope Drift**: If you encounter missing implementations or technical debt that are out of scope for your current task, do not attempt to fix them blindly. Document the issue in `KNOWN_DRIFT.md` and proceed with your primary objective.
+
+## ADR Cadence Protocol
+When an agent proposes or executes an architectural change that:
+1. Modifies `infra/src/api/policy.py` (Authz boundary change)
+2. Alters provider coupling
+3. Modifies global State stores (SQLite)
+
+The agent *must* produce a matching lightweight ADR using the template at `threads/decisions/ADR-001-template.md` and submit it alongside the PR/changes.
