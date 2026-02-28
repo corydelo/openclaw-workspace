@@ -14,3 +14,6 @@ logs/
 
 # Deferred k8s local secret copy (never commit)
 k8s-deferred-20260222/04-secrets.yaml
+
+# Worktrees — local developer checkout directories, never tracked
+.worktrees/
