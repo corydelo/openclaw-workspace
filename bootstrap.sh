@@ -8,7 +8,13 @@ ROOT_ENV="$ROOT_DIR/.env"
 INFRA_ENV="$INFRA_DIR/.env"
 AGENT_ENV="$AGENT_DIR/config/.env"
 AGENT_ENV_EXAMPLE="$AGENT_DIR/config/.env.example"
-INFRA_VENV="$INFRA_DIR/venv"
+if [[ -x "$INFRA_DIR/venv/bin/python" ]]; then
+  INFRA_VENV="$INFRA_DIR/venv"
+elif [[ -x "$INFRA_DIR/.venv/bin/python" ]]; then
+  INFRA_VENV="$INFRA_DIR/.venv"
+else
+  INFRA_VENV="$INFRA_DIR/venv"
+fi
 INFRA_PID_FILE="$ROOT_DIR/.infra.pid"
 INFRA_LOG_FILE="$ROOT_DIR/.infra.log"
 
