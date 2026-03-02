@@ -11,7 +11,7 @@ metadata:
 data:
   NODE_ENV: "production"
   OPENCLAW_LOG_LEVEL: "info"
-  DEFAULT_MODEL: "ollama/deepseek-r1:7b"
+  DEFAULT_MODEL: "ollama/deepseek-r1:8b"
   FALLBACK_MODEL: "openrouter/auto"
   CHROMA_HOST: "chromadb"
   CHROMA_PORT: "8000"
