@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
-# start-infra.sh — Start Oracle infra with Venice burn-down routing
-# Bypasses bootstrap.sh's .env sourcing (which may fail under Finder sandbox).
-# Run from a regular Terminal.app to pick up full env context.
+# start-infra.sh — Start Oracle infra with canonical env + runtime paths.
 set -euo pipefail
 
-INFRA_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/infra"
-LOG_FILE="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/.infra.log"
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+INFRA_DIR="${ROOT_DIR}/infra"
+LOG_FILE="${ROOT_DIR}/.infra.log"
+PID_FILE="${ROOT_DIR}/.infra.pid"
 
 # Kill any existing infra on port 8000
 if lsof -tiTCP:8000 -sTCP:LISTEN > /dev/null 2>&1; then
@@ -19,27 +19,32 @@ cd "$INFRA_DIR"
 
 set -a
 # shellcheck disable=SC1091
-source /Users/corydelouche/Codex/openclaw-workspace/.env || true
-source /Users/corydelouche/Codex/openclaw-workspace/infra/.env || true
+[ -f "${ROOT_DIR}/.env" ] && source "${ROOT_DIR}/.env"
+# shellcheck disable=SC1091
+[ -f "${INFRA_DIR}/.env" ] && source "${INFRA_DIR}/.env"
 set +a
 
-nohup ./venv/bin/python3.14 -m uvicorn src.api.server:app \
+PY_BIN="./venv/bin/python"
+if [[ ! -x "$PY_BIN" ]]; then
+    PY_BIN="./.venv/bin/python"
+fi
+if [[ ! -x "$PY_BIN" ]]; then
+    echo "❌ Could not find infra python at ./venv/bin/python or ./.venv/bin/python"
+    exit 1
+fi
+
+nohup "$PY_BIN" -m uvicorn src.api.server:app \
     --host 127.0.0.1 --port 8000 \
     > "$LOG_FILE" 2>&1 &
 INFRA_PID=$!
-echo "$INFRA_PID" > /Users/corydelouche/Codex/openclaw-workspace/.infra.pid
+echo "$INFRA_PID" > "$PID_FILE"
 echo "Started PID $INFRA_PID → log: $LOG_FILE"
 
 # Wait for readiness
 echo "Waiting for infra readiness..."
-for i in $(seq 1 20); do
+for _ in $(seq 1 20); do
     if curl -fsS http://127.0.0.1:8000/docs > /dev/null 2>&1; then
         echo "✅ Infra ready at http://127.0.0.1:8000"
-        echo ""
-        echo "Venice burn status:"
-        curl -sS http://127.0.0.1:8000/admin/status \
-            -H "X-Admin-Token: jkNkK1Rlc3GJC+XrBZ/Bo2cxiFwtz87DdDVIsSdQN3g=" 2>/dev/null \
-            | python3 -c "import sys, json; d=json.load(sys.stdin); print(json.dumps(d.get('venice_burn', d), indent=2))" 2>/dev/null || true
         exit 0
     fi
     sleep 1

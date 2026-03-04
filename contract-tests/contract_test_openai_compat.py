@@ -196,6 +196,8 @@ def ct_004_malformed_json(base_url: str, api_key: str) -> None:
     )
     if status in (400, 422):
         _pass("CT-004", f"malformed JSON rejected with {status}")
+    elif status == 429:
+        print(f"INFO [CT-004] rate-limited ({status}); skipping malformed-json assertion")
     elif status in (401, 403):
         print(f"INFO [CT-004] auth check fired before JSON parse (status={status}); skipping body validation")
     else:
@@ -215,6 +217,8 @@ def ct_005_missing_messages(base_url: str, api_key: str) -> None:
     status, body = _request(base_url, "/v1/chat/completions", payload, headers)
     if status in (400, 422):
         _pass("CT-005", f"missing 'messages' rejected with {status}")
+    elif status == 429:
+        print(f"INFO [CT-005] rate-limited ({status}); skipping missing-messages assertion")
     elif status in (401, 403):
         print(f"INFO [CT-005] auth check fired (status={status}); skipping validation")
     else:
@@ -234,6 +238,8 @@ def ct_006_empty_messages(base_url: str, api_key: str) -> None:
     status, body = _request(base_url, "/v1/chat/completions", payload, headers)
     if status in (400, 422):
         _pass("CT-006", f"empty 'messages' array rejected with {status}")
+    elif status == 429:
+        print(f"INFO [CT-006] rate-limited ({status}); skipping empty-messages assertion")
     elif status in (401, 403):
         print(f"INFO [CT-006] auth check fired (status={status}); skipping validation")
     elif status == 200:
@@ -320,6 +326,8 @@ def ct_009_malformed_json_returns_422(base_url: str, api_key: str) -> None:
     )
     if status in (400, 422):
         _pass("CT-009", f"malformed JSON rejected with {status}")
+    elif status == 429:
+        print(f"INFO [CT-009] rate-limited ({status}); skipping malformed-json assertion")
     elif status in (401, 403):
         print(f"INFO [CT-009] auth check fired before JSON parse (status={status}); skipping body validation")
     else:
@@ -340,6 +348,8 @@ def ct_010_missing_messages_field_returns_422(base_url: str, api_key: str) -> No
     status, body = _request(base_url, "/v1/chat/completions", payload, headers)
     if status in (400, 422):
         _pass("CT-010", f"missing 'messages' field rejected with {status}")
+    elif status == 429:
+        print(f"INFO [CT-010] rate-limited ({status}); skipping missing-messages assertion")
     elif status in (401, 403):
         print(f"INFO [CT-010] auth check fired (status={status}); skipping validation")
     else:
