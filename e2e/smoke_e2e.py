@@ -127,7 +127,7 @@ def test_oracle_chat():
     print("\n[2] Oracle /v1/chat/completions")
     headers = {}
     if ORACLE_API_KEY:
-        headers["Authorization"] = f"Bearer {ORACLE_API_KEY}"
+        headers["X-API-Key"] = ORACLE_API_KEY
     payload = {"model": "auto", "messages": [{"role": "user", "content": "Reply with exactly: smoke_ok"}]}
     try:
         status, data = request_json(

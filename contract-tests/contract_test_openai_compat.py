@@ -13,7 +13,7 @@ Tests:
   Positive:
     CT-001  Happy-path /v1/chat/completions returns valid OpenAI schema
   Negative:
-    CT-002  Missing Authorization header → 401 or 403
+    CT-002  Missing auth header → 401 or 403
     CT-003  Wrong/invalid API key → 401 or 403
     CT-004  Malformed JSON body → 400 or 422
     CT-005  Missing required 'messages' field → 400 or 422
@@ -78,14 +78,18 @@ def _pass(label: str, note: str = "") -> None:
     print(f"PASS [{label}]", note)
 
 
+def _with_api_key(headers: dict[str, str], api_key: str) -> dict[str, str]:
+    if api_key:
+        headers["X-API-Key"] = api_key
+    return headers
+
+
 # ---------------------------------------------------------------------------
 # CT-001: Happy-path positive test
 # ---------------------------------------------------------------------------
 
 def ct_001_happy_path(base_url: str, api_key: str) -> None:
-    headers = {"Content-Type": "application/json"}
-    if api_key:
-        headers["Authorization"] = f"Bearer {api_key}"
+    headers = _with_api_key({"Content-Type": "application/json"}, api_key)
 
     payload = {
         "model": "oracle/auto",
@@ -130,7 +134,7 @@ def ct_001_happy_path(base_url: str, api_key: str) -> None:
 
 
 # ---------------------------------------------------------------------------
-# CT-002: No Authorization header → 401 or 403
+# CT-002: No auth header → 401 or 403
 # ---------------------------------------------------------------------------
 
 def ct_002_no_auth(base_url: str) -> None:
@@ -168,7 +172,7 @@ def ct_003_bad_key(base_url: str) -> None:
         payload,
         {
             "Content-Type": "application/json",
-            "Authorization": "Bearer this-is-not-a-valid-key-xyzzy-12345",
+            "X-API-Key": "this-is-not-a-valid-key-xyzzy-12345",
         },
     )
     if status in (401, 403):
@@ -184,9 +188,7 @@ def ct_003_bad_key(base_url: str) -> None:
 # ---------------------------------------------------------------------------
 
 def ct_004_malformed_json(base_url: str, api_key: str) -> None:
-    headers = {"Content-Type": "application/json"}
-    if api_key:
-        headers["Authorization"] = f"Bearer {api_key}"
+    headers = _with_api_key({"Content-Type": "application/json"}, api_key)
 
     status, body = _request(
         base_url,
@@ -209,9 +211,7 @@ def ct_004_malformed_json(base_url: str, api_key: str) -> None:
 # ---------------------------------------------------------------------------
 
 def ct_005_missing_messages(base_url: str, api_key: str) -> None:
-    headers = {"Content-Type": "application/json"}
-    if api_key:
-        headers["Authorization"] = f"Bearer {api_key}"
+    headers = _with_api_key({"Content-Type": "application/json"}, api_key)
 
     payload = {"model": "oracle/auto"}  # no messages key
     status, body = _request(base_url, "/v1/chat/completions", payload, headers)
@@ -230,9 +230,7 @@ def ct_005_missing_messages(base_url: str, api_key: str) -> None:
 # ---------------------------------------------------------------------------
 
 def ct_006_empty_messages(base_url: str, api_key: str) -> None:
-    headers = {"Content-Type": "application/json"}
-    if api_key:
-        headers["Authorization"] = f"Bearer {api_key}"
+    headers = _with_api_key({"Content-Type": "application/json"}, api_key)
 
     payload = {"model": "oracle/auto", "messages": []}
     status, body = _request(base_url, "/v1/chat/completions", payload, headers)
@@ -254,11 +252,11 @@ def ct_006_empty_messages(base_url: str, api_key: str) -> None:
 # ---------------------------------------------------------------------------
 
 # ---------------------------------------------------------------------------
-# CT-007: Missing Authorization header → 401 (strict check, negative audit)
+# CT-007: Missing auth header → 401 (strict check, negative audit)
 # ---------------------------------------------------------------------------
 
 def ct_007_missing_auth_returns_401(base_url: str) -> None:
-    """Request without Authorization header should return 401."""
+    """Request without auth header should return 401."""
     payload = {
         "model": "auto",
         "messages": [{"role": "user", "content": "hi"}],
@@ -295,7 +293,7 @@ def ct_008_wrong_api_key_returns_401(base_url: str) -> None:
         payload,
         {
             "Content-Type": "application/json",
-            "Authorization": "Bearer wrong-key-xxxxxxxxxxx",
+            "X-API-Key": "wrong-key-xxxxxxxxxxx",
         },
     )
     if status == 401:
@@ -314,9 +312,7 @@ def ct_008_wrong_api_key_returns_401(base_url: str) -> None:
 
 def ct_009_malformed_json_returns_422(base_url: str, api_key: str) -> None:
     """Request with malformed JSON body should return 422."""
-    headers = {"Content-Type": "application/json"}
-    if api_key:
-        headers["Authorization"] = f"Bearer {api_key}"
+    headers = _with_api_key({"Content-Type": "application/json"}, api_key)
 
     status, body = _request(
         base_url,
@@ -340,9 +336,7 @@ def ct_009_malformed_json_returns_422(base_url: str, api_key: str) -> None:
 
 def ct_010_missing_messages_field_returns_422(base_url: str, api_key: str) -> None:
     """Request missing required 'messages' field should return 422."""
-    headers = {"Content-Type": "application/json"}
-    if api_key:
-        headers["Authorization"] = f"Bearer {api_key}"
+    headers = _with_api_key({"Content-Type": "application/json"}, api_key)
 
     payload = {"model": "auto"}  # missing 'messages'
     status, body = _request(base_url, "/v1/chat/completions", payload, headers)
@@ -362,9 +356,7 @@ def ct_010_missing_messages_field_returns_422(base_url: str, api_key: str) -> No
 
 def ct_011_response_content_is_non_empty(base_url: str, api_key: str) -> None:
     """Response content should be non-empty string (not just whitespace)."""
-    headers = {"Content-Type": "application/json"}
-    if api_key:
-        headers["Authorization"] = f"Bearer {api_key}"
+    headers = _with_api_key({"Content-Type": "application/json"}, api_key)
 
     payload = {
         "model": "auto",
