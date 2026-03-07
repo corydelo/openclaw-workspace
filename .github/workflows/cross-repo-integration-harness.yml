@@ -68,6 +68,12 @@ jobs:
         with:
           python-version: "3.11"
 
+      - name: Run plaintext secret guard
+        shell: bash
+        run: |
+          set -euo pipefail
+          make secret-guard
+
       - name: Run one-job integration harness
         shell: bash
         run: |

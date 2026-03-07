@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-E2E smoke test for the full OpenClaw → Oracle stack.
+E2E smoke test for the Oracle + Signal stack.
 
 Replaces the original placeholder (DRIFT-002: had zero assertions).
 
@@ -36,7 +36,7 @@ load_dotenv(WORKSPACE_ROOT / ".env")
 load_dotenv(WORKSPACE_ROOT / "infra" / ".env")
 
 ORACLE_BASE_URL = os.getenv("LLM_ARCH_BASE_URL", "http://127.0.0.1:8000")
-AGENT_BASE_URL = os.getenv("AGENT_BASE_URL", "http://127.0.0.1:18789")
+SIGNAL_BASE_URL = os.getenv("SIGNAL_BASE_URL", "http://127.0.0.1:8080")
 ORACLE_API_KEY = os.getenv("ORACLE_API_KEY", "")
 HEALTH_TIMEOUT = 60  # seconds to wait for services
 
@@ -95,17 +95,18 @@ def check(name: str, condition: bool, detail: str = "") -> None:
         errors.append(msg)
 
 
-def wait_for_health(url: str, timeout: int = HEALTH_TIMEOUT) -> bool:
+def wait_for_health(url: str, timeout: int = HEALTH_TIMEOUT, allowed_statuses: set[int] | None = None) -> bool:
+    expected = allowed_statuses or {200}
     deadline = time.time() + timeout
     while time.time() < deadline:
         try:
             status, _ = request_json("GET", url, timeout=5)
-            if status < 500:
+            if status in expected:
                 return True
         except Exception:
             pass
         curl_code = curl_status_code(url, timeout=5)
-        if curl_code is not None and curl_code < 500:
+        if curl_code is not None and curl_code in expected:
             return True
         time.sleep(2)
     return False
@@ -113,7 +114,7 @@ def wait_for_health(url: str, timeout: int = HEALTH_TIMEOUT) -> bool:
 
 def test_oracle_health():
     print("\n[1] Oracle health")
-    ok = wait_for_health(f"{ORACLE_BASE_URL}/api/v1/health")
+    ok = wait_for_health(f"{ORACLE_BASE_URL}/api/v1/health", allowed_statuses={200})
     check("Oracle /api/v1/health reachable", ok)
     if ok:
         _, data = request_json("GET", f"{ORACLE_BASE_URL}/api/v1/health", timeout=5)
@@ -126,7 +127,7 @@ def test_oracle_chat():
     print("\n[2] Oracle /v1/chat/completions")
     headers = {}
     if ORACLE_API_KEY:
-        headers["Authorization"] = f"Bearer {ORACLE_API_KEY}"
+        headers["X-API-Key"] = ORACLE_API_KEY
     payload = {"model": "auto", "messages": [{"role": "user", "content": "Reply with exactly: smoke_ok"}]}
     try:
         status, data = request_json(
@@ -148,19 +149,17 @@ def test_oracle_chat():
         check("Oracle chat request", False, str(e))
 
 
-def test_agent_health():
-    print("\n[3] OpenClaw agent health")
-    ok = wait_for_health(f"{AGENT_BASE_URL}/health", timeout=30)
-    if not ok:
-        ok = wait_for_health(f"{AGENT_BASE_URL}/", timeout=10)
-    check("Agent /health reachable", ok)
+def test_signal_health():
+    print("\n[3] Signal health")
+    ok = wait_for_health(f"{SIGNAL_BASE_URL}/v1/health", timeout=30, allowed_statuses={200, 204})
+    check("Signal /v1/health reachable (200/204)", ok)
 
 
 if __name__ == "__main__":
     print("=== Codex E2E Smoke Test ===")
     test_oracle_health()
     test_oracle_chat()
-    test_agent_health()
+    test_signal_health()
 
     print(f"\n{'='*30}")
     if errors:

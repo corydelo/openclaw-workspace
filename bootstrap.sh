@@ -8,7 +8,13 @@ ROOT_ENV="$ROOT_DIR/.env"
 INFRA_ENV="$INFRA_DIR/.env"
 AGENT_ENV="$AGENT_DIR/config/.env"
 AGENT_ENV_EXAMPLE="$AGENT_DIR/config/.env.example"
-INFRA_VENV="$INFRA_DIR/venv"
+if [[ -x "$INFRA_DIR/venv/bin/python" ]]; then
+  INFRA_VENV="$INFRA_DIR/venv"
+elif [[ -x "$INFRA_DIR/.venv/bin/python" ]]; then
+  INFRA_VENV="$INFRA_DIR/.venv"
+else
+  INFRA_VENV="$INFRA_DIR/venv"
+fi
 INFRA_PID_FILE="$ROOT_DIR/.infra.pid"
 INFRA_LOG_FILE="$ROOT_DIR/.infra.log"
 
@@ -126,6 +132,23 @@ ensure_infra_env() {
   upsert_env "$INFRA_ENV" "WORKFLOW_TOKEN_BUDGET" "${WORKFLOW_TOKEN_BUDGET:-6000}"
   if ! grep -q "^CLOUD_ONLY=" "$INFRA_ENV"; then
     upsert_env "$INFRA_ENV" "CLOUD_ONLY" "true"
+  fi
+
+  local signal_number="${SIGNAL_NUMBER:-}"
+  local signal_whitelist="${SIGNAL_WHITELIST:-${SIGNAL_ALLOWED_NUMBERS:-}}"
+  if [[ -z "$signal_number" && -f "$AGENT_ENV" ]]; then
+    signal_number="$(awk -F= '/^SIGNAL_NUMBER=/{print $2}' "$AGENT_ENV" | tail -n 1 || true)"
+  fi
+  if [[ -z "$signal_whitelist" && -f "$AGENT_ENV" ]]; then
+    signal_whitelist="$(awk -F= '/^SIGNAL_ALLOWED_NUMBERS=/{print $2}' "$AGENT_ENV" | tail -n 1 || true)"
+  fi
+  if [[ -n "$signal_number" ]]; then
+    upsert_env "$INFRA_ENV" "SIGNAL_ENABLED" "${SIGNAL_ENABLED:-true}"
+    upsert_env "$INFRA_ENV" "SIGNAL_NUMBER" "$signal_number"
+    upsert_env "$INFRA_ENV" "SIGNAL_API_URL" "${SIGNAL_API_URL:-http://127.0.0.1:8080}"
+  fi
+  if [[ -n "$signal_whitelist" ]]; then
+    upsert_env "$INFRA_ENV" "SIGNAL_WHITELIST" "$signal_whitelist"
   fi
 
   # Optional Venice routing settings: if set in root env or shell, propagate
@@ -438,8 +461,8 @@ run_smoke() {
 
 prepare() {
   ensure_root_env
-  ensure_infra_env
   ensure_agent_env
+  ensure_infra_env
   sync_submodules
   verify_submodule_pins
   install_infra_deps

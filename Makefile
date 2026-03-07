@@ -1,4 +1,4 @@
-.PHONY: sync status up down smoke contract-test e2e infra-up infra-down agent-up agent-down prepare submodule-check agent-drift-check venice-models preflight factory-loop
+.PHONY: sync status up down smoke contract-test e2e infra-up infra-down agent-up agent-down prepare submodule-check agent-drift-check venice-models preflight factory-loop secret-guard
 
 SHELL := /bin/bash
 
@@ -84,3 +84,6 @@ preflight:
 
 factory-loop:
 	cd infra && python3 -m src.agents.factory_loop --tasks ../tasks/tasks.json
+
+secret-guard:
+	python3 scripts/plaintext_secret_guard.py

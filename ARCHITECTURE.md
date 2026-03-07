@@ -40,7 +40,7 @@ From `Makefile`:
 
 ## Environment and Auth Coupling
 - Workspace root `.env` drives integration-level values.
-- `bootstrap.sh` propagates `ORACLE_API_KEY` and Oracle base URL into agent + infra env files.
+- `bootstrap.sh` propagates `ORACLE_API_KEY`, Oracle base URL, and Signal bridge settings into agent + infra env files.
 - Contract test reads `.env` and hits `/v1/chat/completions` with bearer key when present.
 
 ## Operational Commands
