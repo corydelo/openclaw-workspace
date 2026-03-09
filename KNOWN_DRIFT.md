@@ -26,6 +26,16 @@
 - Impact: integration regressions can appear without changes in this repo.
 - Status: open
 
+### DRIFT-005: Legacy OpenClaw docs still reference port 18789 as the active path
+- Evidence: multiple documents under `agent/` and ancillary guides still describe the commented-out OpenClaw gateway instead of the Oracle + Signal runtime.
+- Impact: operators can follow stale recovery guidance even when the canonical stack is Oracle on `:8000` plus Signal bridge on `:8080`.
+- Status: open
+
+### DRIFT-006: Ollama health checks do not prove inference readiness
+- Evidence: Docker health checks report the Ollama container healthy and `/api/tags` lists models, but direct `POST /api/generate` against `127.0.0.1:11435` times out for a tiny prompt.
+- Impact: Oracle can come online cleanly while the local-model path still hangs long enough to force cloud fallback or contract-test timeouts.
+- Status: open
+
 ## Review Protocol
 When closing drift:
 1. Record the exact commit and command used for verification.

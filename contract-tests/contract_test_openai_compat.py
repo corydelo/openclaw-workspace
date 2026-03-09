@@ -27,6 +27,8 @@ import urllib.request
 import urllib.error
 from pathlib import Path
 
+REQUEST_TIMEOUT_SECONDS = float(os.getenv("CONTRACT_TEST_TIMEOUT_SECONDS", "90"))
+
 
 def load_dotenv(dotenv_path: str = ".env") -> None:
     """
@@ -63,7 +65,7 @@ def _request(base_url: str, path: str, payload, headers: dict) -> tuple[int, str
         data = payload
     req = urllib.request.Request(url, data=data, headers=headers, method="POST")
     try:
-        with urllib.request.urlopen(req, timeout=30) as resp:
+        with urllib.request.urlopen(req, timeout=REQUEST_TIMEOUT_SECONDS) as resp:
             return resp.status, resp.read().decode("utf-8", errors="replace")
     except urllib.error.HTTPError as exc:
         return exc.code, exc.read().decode("utf-8", errors="replace")
@@ -393,6 +395,8 @@ def main():
     )
 
     print(f"Contract tests against: {base_url}")
+    print(f"Request timeout: {REQUEST_TIMEOUT_SECONDS:.0f}s")
+    print()
     print()
 
     ct_001_happy_path(base_url, api_key)

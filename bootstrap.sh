@@ -8,6 +8,7 @@ ROOT_ENV="$ROOT_DIR/.env"
 INFRA_ENV="$INFRA_DIR/.env"
 AGENT_ENV="$AGENT_DIR/config/.env"
 AGENT_ENV_EXAMPLE="$AGENT_DIR/config/.env.example"
+DEFAULT_DATA_ROOT="$ROOT_DIR/.openclaw_data"
 if [[ -x "$INFRA_DIR/venv/bin/python" ]]; then
   INFRA_VENV="$INFRA_DIR/venv"
 elif [[ -x "$INFRA_DIR/.venv/bin/python" ]]; then
@@ -113,6 +114,14 @@ ensure_root_env() {
     LLM_ARCH_BASE_URL="http://127.0.0.1:8000"
     upsert_env "$ROOT_ENV" "LLM_ARCH_BASE_URL" "$LLM_ARCH_BASE_URL"
   fi
+  if [[ -z "${OLLAMA_BASE_URL:-}" ]]; then
+    OLLAMA_BASE_URL="http://127.0.0.1:11435"
+    upsert_env "$ROOT_ENV" "OLLAMA_BASE_URL" "$OLLAMA_BASE_URL"
+  fi
+  if [[ -z "${OPENCLAW_DATA_DIR:-}" ]]; then
+    OPENCLAW_DATA_DIR="$DEFAULT_DATA_ROOT"
+    upsert_env "$ROOT_ENV" "OPENCLAW_DATA_DIR" "$OPENCLAW_DATA_DIR"
+  fi
   if [[ -z "${WORKFLOW_APPROVAL_MODE:-}" ]]; then
     WORKFLOW_APPROVAL_MODE="on-risk"
     upsert_env "$ROOT_ENV" "WORKFLOW_APPROVAL_MODE" "$WORKFLOW_APPROVAL_MODE"
@@ -132,6 +141,12 @@ ensure_infra_env() {
   upsert_env "$INFRA_ENV" "WORKFLOW_TOKEN_BUDGET" "${WORKFLOW_TOKEN_BUDGET:-6000}"
   if ! grep -q "^CLOUD_ONLY=" "$INFRA_ENV"; then
     upsert_env "$INFRA_ENV" "CLOUD_ONLY" "true"
+  fi
+  if [[ -n "${OLLAMA_BASE_URL:-}" ]]; then
+    upsert_env "$INFRA_ENV" "OLLAMA_BASE_URL" "$OLLAMA_BASE_URL"
+  fi
+  if [[ -n "${OPENCLAW_DATA_DIR:-}" ]]; then
+    upsert_env "$INFRA_ENV" "OPENCLAW_DATA_DIR" "$OPENCLAW_DATA_DIR"
   fi
 
   local signal_number="${SIGNAL_NUMBER:-}"
@@ -303,6 +318,40 @@ install_infra_deps() {
   "$INFRA_VENV/bin/pip" install -r "$INFRA_DIR/requirements.txt"
 }
 
+launch_detached_infra() {
+  local uvicorn_bin="$1"
+  INFRA_UVICORN_BIN="$uvicorn_bin" \
+  INFRA_WORKDIR="$INFRA_DIR" \
+  INFRA_LOG_TARGET="$INFRA_LOG_FILE" \
+  python3 - <<'PY'
+import os
+import subprocess
+
+cmd = [
+    os.environ["INFRA_UVICORN_BIN"],
+    "src.api.server:app",
+    "--host",
+    "127.0.0.1",
+    "--port",
+    "8000",
+]
+
+with open(os.environ["INFRA_LOG_TARGET"], "ab", buffering=0) as log_handle:
+    proc = subprocess.Popen(
+        cmd,
+        cwd=os.environ["INFRA_WORKDIR"],
+        env=os.environ.copy(),
+        stdin=subprocess.DEVNULL,
+        stdout=log_handle,
+        stderr=subprocess.STDOUT,
+        start_new_session=True,
+        close_fds=True,
+    )
+
+print(proc.pid)
+PY
+}
+
 wait_for_infra() {
   local attempts=60
   while (( attempts > 0 )); do
@@ -334,18 +383,14 @@ start_infra() {
   fi
 
   local launched_pid
-  (
+  launched_pid="$(
     cd "$INFRA_DIR"
     # shellcheck disable=SC1090
     set -a && source "$INFRA_ENV" && set +a
-    nohup "$INFRA_VENV/bin/uvicorn" src.api.server:app --host 127.0.0.1 --port 8000 >"$INFRA_LOG_FILE" 2>&1 &
-    launched_pid="$!"
-    echo "$launched_pid" >"$INFRA_PID_FILE"
-    printf '%s\n' "$launched_pid"
-  ) >"$ROOT_DIR/.infra.launch.out"
-
-  launched_pid="$(tail -n 1 "$ROOT_DIR/.infra.launch.out" 2>/dev/null || true)"
-  rm -f "$ROOT_DIR/.infra.launch.out"
+    mkdir -p "${OPENCLAW_DATA_DIR:-$DEFAULT_DATA_ROOT}"
+    launch_detached_infra "$INFRA_VENV/bin/uvicorn"
+  )"
+  printf '%s\n' "$launched_pid" >"$INFRA_PID_FILE"
 
   # Catch immediate bind/crash failure before readiness loop.
   sleep 1
