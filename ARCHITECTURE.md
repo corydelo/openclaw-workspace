@@ -1,77 +1,46 @@
 # openclaw-workspace: Architecture
 
 ## Snapshot
-- Last reviewed: 2026-02-17
-- Commit: `87657a6`
-- Working tree at review: dirty (Makefile, contract test, submodule state, runtime artifacts)
 
-## First-Read Files
-- `AGENTS.md`
-- `Makefile`
-- `bootstrap.sh`
-- `.gitmodules`
-- `contract-tests/contract_test_openai_compat.py`
-- `e2e/smoke_e2e.py`
+- Last reviewed: 2026-03-11
+- Runtime posture: cloud-only Oracle, Signal-first ingress
 
-## Repo Role
-This repo is an integration harness for the full stack:
-- `infra/` submodule (LLM-Architecture)
-- `agent/` submodule (sturdy-journey)
-- Integration checks in `contract-tests/` and `e2e/`
+## Runtime Topology
 
-## Bring-Up Flow (`make up`)
-`make up` -> `./bootstrap.sh up` ->
-1. Ensure root `.env` (`ORACLE_API_KEY`, `LLM_ARCH_BASE_URL`).
-2. Ensure `infra/.env` and `agent/config/.env` are present and synced.
-3. Sync + verify submodule pins.
-4. Install infra deps in `infra/venv`.
-5. Start agent compose stack.
-6. Start infra uvicorn app.
-7. Run contract test (`contract-tests/contract_test_openai_compat.py`).
+- `openclaw-workspace/infra`: Oracle FastAPI runtime on `127.0.0.1:8000`
+- `openclaw-workspace/agent/docker/docker-compose.yml`: Signal bridge + Chroma only
+- `openclaw-workspace/agent/archive/`: archived OpenClaw config fixtures, not live runtime state
 
-## Source-of-Truth Commands
-From `Makefile`:
-- `make sync`
-- `make up`
-- `make down`
-- `make contract-test`
-- `make e2e`
-- `make submodule-check`
+## Bring-Up Flow
 
-## Environment and Auth Coupling
-- Workspace root `.env` drives integration-level values.
-- `bootstrap.sh` propagates `ORACLE_API_KEY`, Oracle base URL, and Signal bridge settings into agent + infra env files.
-- Contract test reads `.env` and hits `/v1/chat/completions` with bearer key when present.
+`make up` runs:
 
-## Operational Commands
-```bash
-# Sync pinned submodules
-make sync
+1. `bootstrap.sh prepare`
+2. `bootstrap.sh agent-up`
+3. `bootstrap.sh infra-up`
+4. `contract-tests/contract_test_openai_compat.py`
 
-# Full bring-up + contract test
-make up
+## Scaffold Maintenance
 
-# Contract only
-make contract-test
+- Canonical scaffold reconciliation entrypoint: `bash ./bootstrap.sh upgrade`
+- Automation-safe dry run: `bash ./bootstrap.sh upgrade --check`
+- Policy source: `openclaw-workspace/config/scaffold-upgrade.json`
+- Safe lane currently refreshes workspace bootstrap state, the pinned code-graph Python 3.12 env, and verification guards
 
-# E2E smoke
-make e2e
+## Ingress Policy
 
-# Tear down
-make down
-```
+- Primary ingress: Signal via Oracle `SignalAdapter`
+- Secondary ingress: authenticated HTTP `/v1/chat/completions`
+- Internal memory: Chroma only
 
-## Subsystems & Capabilities
-- **Prompt Caching**: The `OrchestratorAgent` utilizes Prompt Caching Architecture v2 (ID-056) to optimize LLM calls.
-- **System Governance (Thread 6)**: The system enforces terminal states for governance artifacts, requiring ledger entries for accepted changes and utilizing refusal language for missing terminal artifacts.
-- **Security & Autonomy**: The agent architecture includes a dedicated security review subsystem, Docker isolation for runtime evaluation, and an autonomous learning loop with context drift detection.
-- **Execution Topology**: The execution flow relies on a localized Graph Orchestrator, Execution Dispatcher, and Code Factory Loop synced between the agent codebase and `llm-architecture`.
+## Environment Contract
 
-## Cost & Routing Strategy
-The workspace utilizes a Venice burn configuration with a daily token budget of 0 (letting Venice enforce the quota). It falls back to the `eco` profile to prioritize free and then cheaper API tiers.
+- Required: `ORACLE_API_KEY`, `LLM_ARCH_BASE_URL`, `SIGNAL_ENABLED`, `SIGNAL_NUMBER`, `SIGNAL_API_URL`, `SIGNAL_WHITELIST`
+- Default safety controls: `WORKFLOW_APPROVAL_MODE`, `WORKFLOW_TOKEN_BUDGET`
+- Optional local-model path: set `CLOUD_ONLY=false` and explicitly provide `OLLAMA_BASE_URL`
 
-## Living-Doc Maintenance
-Update this file whenever:
-- Makefile targets change semantics.
-- bootstrap env propagation logic changes.
-- submodule paths/urls or integration boundaries change.
+## Source of Truth
+
+- Live deployment orchestration: this workspace
+- Canonical agent authoring repo: `../sturdy-journey`
+- Canonical Oracle authoring repo remains upstream, but live startup is expected from `openclaw-workspace/infra`

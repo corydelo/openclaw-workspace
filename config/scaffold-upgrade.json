@@ -1,0 +1,50 @@
+{
+  "schema_version": "scaffold-upgrade.v1",
+  "default_lane": "safe",
+  "lanes": {
+    "safe": [
+      "workspace_prepare",
+      "code_graph_runtime",
+      "submodule_check",
+      "secret_guard"
+    ],
+    "verify": [
+      "submodule_check",
+      "secret_guard"
+    ]
+  },
+  "steps": {
+    "workspace_prepare": {
+      "kind": "bootstrap",
+      "description": "Reconcile workspace env files, submodules, and default infra runtime",
+      "subcommand": "prepare",
+      "approval_required": true
+    },
+    "code_graph_runtime": {
+      "kind": "python_venv",
+      "description": "Refresh the pinned Python 3.12 code-graph runtime",
+      "venv_path": "infra/venv-py312",
+      "requirements": "infra/requirements.txt",
+      "python_version_file": "infra/.python-version",
+      "approval_required": true
+    },
+    "submodule_check": {
+      "kind": "command",
+      "description": "Verify workspace submodule pins remain aligned",
+      "command": [
+        "make",
+        "submodule-check"
+      ],
+      "run_in_check": true
+    },
+    "secret_guard": {
+      "kind": "command",
+      "description": "Run the plaintext secret guard before accepting scaffold changes",
+      "command": [
+        "make",
+        "secret-guard"
+      ],
+      "run_in_check": true
+    }
+  }
+}

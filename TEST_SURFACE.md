@@ -1,49 +1,27 @@
 # openclaw-workspace: Test Surface
 
 ## Snapshot
-- Last reviewed: 2026-02-17
-- Commit: `87657a6`
 
-## Current Automated Checks
+- Last reviewed: 2026-03-11
+- Default validation mode: cloud-only Oracle + Signal-first
+
+## Automated Checks
+
 - Contract: `contract-tests/contract_test_openai_compat.py`
-- E2E smoke: `e2e/smoke_e2e.py`
+- Smoke: `e2e/smoke_e2e.py`
+- Health gates: `/Users/corydelouche/Codex/scripts/doctor.sh`, `/Users/corydelouche/Codex/scripts/status.sh`
+- Infra unit coverage: `infra/tests/test_selector.py`, `infra/tests/test_system_factory.py`
 - Pin integrity: `make submodule-check`
 
-## Contract Test Behavior
-`contract-tests/contract_test_openai_compat.py` validates:
-- Infra endpoint reachability.
-- OpenAI-compatible response shape keys (`id`, `object`, `created`, `model`, `choices`).
-- Content assertion for prompt "Reply with exactly: ok".
-- Optional `x_oracle` metadata readout.
+## What Current Checks Assert
 
-## E2E Behavior
-`e2e/smoke_e2e.py` is currently a placeholder that prints intended next steps and does not assert behavior.
+- Oracle OpenAI-compatible endpoint is reachable and authenticated.
+- Signal bridge health is reachable on `:8080`.
+- Oracle signal adapter status is reachable on `:8000/api/v1/signal/status`.
+- Default Tier0 behavior is cloud-only; Ollama tests are explicit opt-in with `CLOUD_ONLY=false`.
 
-## Standard Commands
-```bash
-# Full integration bring-up and contract test
-make up
+## Known Gaps
 
-# Contract test only
-make contract-test
-
-# Placeholder e2e smoke
-make e2e
-
-# Validate submodule pin cleanliness
-make submodule-check
-```
-
-## Coverage Gaps
-- No real end-to-end assertions across agent -> infra -> response.
-- No health-check gate before running E2E test.
-- No negative tests (bad API key, missing env, infra unavailable).
-- Contract test asserts exact content `ok`, which can be brittle across model behavior changes.
-
-## Suggested Next Additions
-- Replace `e2e/smoke_e2e.py` placeholder with real request/response assertions.
-- Add a deterministic health target (`make health`) used by both contract and E2E flows.
-- Add a contract test variant for auth failure and malformed payload handling.
-
-## Living-Doc Maintenance
-Update this file when test scripts, acceptance criteria, or make targets change.
+- No automated remote VM validation yet for systemd/service wiring.
+- Signal end-to-end message handling still requires manual allowlisted message validation.
+- Negative coverage for stale host Ollama listeners is warning-oriented in shell tooling.

@@ -8,6 +8,7 @@ ROOT_ENV="$ROOT_DIR/.env"
 INFRA_ENV="$INFRA_DIR/.env"
 AGENT_ENV="$AGENT_DIR/config/.env"
 AGENT_ENV_EXAMPLE="$AGENT_DIR/config/.env.example"
+SCAFFOLD_UPGRADE_SCRIPT="$ROOT_DIR/scripts/scaffold_upgrade.py"
 DEFAULT_DATA_ROOT="$ROOT_DIR/.openclaw_data"
 if [[ -x "$INFRA_DIR/venv/bin/python" ]]; then
   INFRA_VENV="$INFRA_DIR/venv"
@@ -95,6 +96,42 @@ upsert_env() {
   rm "$tmp_file"
 }
 
+remove_env_key() {
+  local file="$1"
+  local key="$2"
+  local tmp_file
+
+  [[ -f "$file" ]] || return 0
+
+  tmp_file="$(mktemp /tmp/bootstrap.XXXXXX)"
+  awk -v k="$key" '$0 !~ ("^" k "=") { print }' "$file" >"$tmp_file"
+  cat "$tmp_file" >"$file"
+  rm "$tmp_file"
+}
+
+env_file_value() {
+  local file="$1"
+  local key="$2"
+
+  [[ -f "$file" ]] || return 0
+  awk -F= -v k="$key" '$1 == k { sub(/^[^=]*=/, ""); print }' "$file" | tail -n 1 || true
+}
+
+adopt_env_value() {
+  local file="$1"
+  local key="$2"
+  local value="${!key:-}"
+
+  if [[ -z "$value" ]]; then
+    value="$(env_file_value "$file" "$key")"
+  fi
+
+  if [[ -n "$value" ]]; then
+    printf -v "$key" '%s' "$value"
+    export "${key?}"
+  fi
+}
+
 ensure_root_env() {
   mkdir -p "$ROOT_DIR"
   if [[ ! -f "$ROOT_ENV" ]]; then
@@ -106,6 +143,27 @@ ensure_root_env() {
   # shellcheck disable=SC1090
   set -a && source "$ROOT_ENV" && set +a
 
+  local inherited_keys=(
+    "OPENROUTER_API_KEY"
+    "GROQ_API_KEY"
+    "OPENAI_API_KEY"
+    "ANTHROPIC_API_KEY"
+    "SIGNAL_ENABLED"
+    "SIGNAL_NUMBER"
+    "SIGNAL_API_URL"
+    "SIGNAL_WHITELIST"
+  )
+  local inherited_key
+  for inherited_key in "${inherited_keys[@]}"; do
+    adopt_env_value "$AGENT_ENV" "$inherited_key"
+  done
+  if [[ -z "${SIGNAL_WHITELIST:-}" ]]; then
+    SIGNAL_WHITELIST="$(env_file_value "$AGENT_ENV" "SIGNAL_ALLOWED_NUMBERS")"
+    if [[ -n "${SIGNAL_WHITELIST:-}" ]]; then
+      export SIGNAL_WHITELIST
+    fi
+  fi
+
   if [[ -z "${ORACLE_API_KEY:-}" ]]; then
     ORACLE_API_KEY="$(generate_oracle_key)"
     upsert_env "$ROOT_ENV" "ORACLE_API_KEY" "$ORACLE_API_KEY"
@@ -114,9 +172,9 @@ ensure_root_env() {
     LLM_ARCH_BASE_URL="http://127.0.0.1:8000"
     upsert_env "$ROOT_ENV" "LLM_ARCH_BASE_URL" "$LLM_ARCH_BASE_URL"
   fi
-  if [[ -z "${OLLAMA_BASE_URL:-}" ]]; then
-    OLLAMA_BASE_URL="http://127.0.0.1:11435"
-    upsert_env "$ROOT_ENV" "OLLAMA_BASE_URL" "$OLLAMA_BASE_URL"
+  if [[ -z "${CLOUD_ONLY:-}" ]]; then
+    CLOUD_ONLY="true"
+    upsert_env "$ROOT_ENV" "CLOUD_ONLY" "$CLOUD_ONLY"
   fi
   if [[ -z "${OPENCLAW_DATA_DIR:-}" ]]; then
     OPENCLAW_DATA_DIR="$DEFAULT_DATA_ROOT"
@@ -130,24 +188,66 @@ ensure_root_env() {
     WORKFLOW_TOKEN_BUDGET="6000"
     upsert_env "$ROOT_ENV" "WORKFLOW_TOKEN_BUDGET" "$WORKFLOW_TOKEN_BUDGET"
   fi
+  if [[ -n "${SIGNAL_NUMBER:-}" ]]; then
+    if [[ -z "${SIGNAL_ENABLED:-}" ]]; then
+      SIGNAL_ENABLED="true"
+      export SIGNAL_ENABLED
+    fi
+    if [[ -z "${SIGNAL_API_URL:-}" ]]; then
+      SIGNAL_API_URL="http://127.0.0.1:8080"
+      export SIGNAL_API_URL
+    fi
+  fi
+
+  local mirrored_keys=(
+    "OPENROUTER_API_KEY"
+    "GROQ_API_KEY"
+    "OPENAI_API_KEY"
+    "ANTHROPIC_API_KEY"
+    "SIGNAL_ENABLED"
+    "SIGNAL_NUMBER"
+    "SIGNAL_API_URL"
+    "SIGNAL_WHITELIST"
+  )
+  local mirrored_key
+  for mirrored_key in "${mirrored_keys[@]}"; do
+    if [[ -n "${!mirrored_key:-}" ]]; then
+      upsert_env "$ROOT_ENV" "$mirrored_key" "${!mirrored_key}"
+    fi
+  done
 }
 
 ensure_infra_env() {
   touch "$INFRA_ENV"
+  local cloud_only="${CLOUD_ONLY:-true}"
   upsert_env "$INFRA_ENV" "API_KEYS" "${ORACLE_API_KEY}"
   upsert_env "$INFRA_ENV" "API_AUTH_MODE" "${API_AUTH_MODE:-required}"
   upsert_env "$INFRA_ENV" "API_AUTH_ALLOW_EMPTY_KEYS" "${API_AUTH_ALLOW_EMPTY_KEYS:-false}"
   upsert_env "$INFRA_ENV" "WORKFLOW_APPROVAL_MODE" "${WORKFLOW_APPROVAL_MODE:-on-risk}"
   upsert_env "$INFRA_ENV" "WORKFLOW_TOKEN_BUDGET" "${WORKFLOW_TOKEN_BUDGET:-6000}"
-  if ! grep -q "^CLOUD_ONLY=" "$INFRA_ENV"; then
-    upsert_env "$INFRA_ENV" "CLOUD_ONLY" "true"
-  fi
-  if [[ -n "${OLLAMA_BASE_URL:-}" ]]; then
+  upsert_env "$INFRA_ENV" "CLOUD_ONLY" "$cloud_only"
+  if truthy "$cloud_only"; then
+    remove_env_key "$INFRA_ENV" "OLLAMA_BASE_URL"
+  elif [[ -n "${OLLAMA_BASE_URL:-}" ]]; then
     upsert_env "$INFRA_ENV" "OLLAMA_BASE_URL" "$OLLAMA_BASE_URL"
   fi
   if [[ -n "${OPENCLAW_DATA_DIR:-}" ]]; then
     upsert_env "$INFRA_ENV" "OPENCLAW_DATA_DIR" "$OPENCLAW_DATA_DIR"
   fi
+
+  local provider_keys=(
+    "OPENROUTER_API_KEY"
+    "GROQ_API_KEY"
+    "OPENAI_API_KEY"
+    "ANTHROPIC_API_KEY"
+  )
+  local provider_key
+  for provider_key in "${provider_keys[@]}"; do
+    adopt_env_value "$AGENT_ENV" "$provider_key"
+    if [[ -n "${!provider_key:-}" ]]; then
+      upsert_env "$INFRA_ENV" "$provider_key" "${!provider_key}"
+    fi
+  done
 
   local signal_number="${SIGNAL_NUMBER:-}"
   local signal_whitelist="${SIGNAL_WHITELIST:-${SIGNAL_ALLOWED_NUMBERS:-}}"
@@ -504,6 +604,56 @@ run_smoke() {
   run_e2e_smoke
 }
 
+run_upgrade() {
+  local mode="apply"
+  local lane=""
+  local approve_flag=""
+  local passthrough=()
+
+  while (($# > 0)); do
+    case "$1" in
+      --check)
+        mode="check"
+        ;;
+      --approve)
+        approve_flag="--approve"
+        ;;
+      --lane)
+        shift
+        if (($# == 0)); then
+          echo "ERROR: --lane requires a value" >&2
+          exit 1
+        fi
+        lane="$1"
+        ;;
+      *)
+        passthrough+=("$1")
+        ;;
+    esac
+    shift || true
+  done
+
+  if [[ ! -f "$SCAFFOLD_UPGRADE_SCRIPT" ]]; then
+    echo "ERROR: missing scaffold upgrade runner: $SCAFFOLD_UPGRADE_SCRIPT" >&2
+    exit 1
+  fi
+
+  local cmd=(python3 "$SCAFFOLD_UPGRADE_SCRIPT" "$mode")
+  if [[ -n "$lane" ]]; then
+    cmd+=(--lane "$lane")
+  fi
+  if [[ -n "$approve_flag" ]]; then
+    cmd+=("$approve_flag")
+  fi
+  if ((${#passthrough[@]} > 0)); then
+    cmd+=("${passthrough[@]}")
+  fi
+  (
+    cd "$ROOT_DIR"
+    "${cmd[@]}"
+  )
+}
+
 prepare() {
   ensure_root_env
   ensure_agent_env
@@ -525,9 +675,11 @@ down_all() {
   stop_infra
 }
 
-cmd="${1:-up}"
-case "$cmd" in
+action="${1:-up}"
+shift || true
+case "$action" in
   prepare) prepare ;;
+  upgrade) run_upgrade "$@" ;;
   infra-up) prepare; start_infra ;;
   infra-down) stop_infra ;;
   agent-up) prepare; start_agent ;;
@@ -537,7 +689,7 @@ case "$cmd" in
   up) up_all ;;
   down) down_all ;;
   *)
-    echo "Usage: $0 {prepare|infra-up|infra-down|agent-up|agent-down|contract-test|smoke|up|down}" >&2
+    echo "Usage: $0 {prepare|upgrade [--check] [--approve] [--lane <name>]|infra-up|infra-down|agent-up|agent-down|contract-test|smoke|up|down}" >&2
     exit 1
     ;;
 esac

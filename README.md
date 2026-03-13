@@ -1,67 +1,52 @@
 # openclaw-workspace
 
-Integration workspace for OpenClaw agent (`agent/`) and LLM architecture (`infra/`).
+Canonical deploy workspace for the live Oracle runtime.
 
-## Quick Commands
+## Live Contract
+
+- Deploy from this workspace only.
+- Oracle HTTP API listens on `127.0.0.1:8000`.
+- Signal bridge listens on `127.0.0.1:8080`.
+- Chroma runs internal-only in Docker.
+- OpenClaw gateway and VM-local Ollama are not part of the default live path.
+
+## Repo Role
+
+- `infra/`: pinned Oracle runtime component.
+- `agent/`: pinned `sturdy-journey` mirror for Signal config, docs, and archived OpenClaw fixtures.
+- `contract-tests/` and `e2e/`: workspace-level validation for the live stack.
+
+## Standard Commands
 
 ```bash
-make sync
-make up
+make prepare
+make upgrade
+make agent-up
+make infra-up
 make contract-test
 make e2e
 make down
 ```
 
-## Code Factory Migration
+## Scaffold Upgrade
 
-This workspace now includes a deterministic Code Factory loop for autonomous routine changes.
+Use `make upgrade` or `bash ./bootstrap.sh upgrade` as the single scaffold-reconciliation entrypoint.
 
-### Added contract and gates
+- Default behavior is approval-gated apply mode.
+- `bash ./bootstrap.sh upgrade --check` is the non-destructive automation lane.
+- The workflow is manifest-driven by `config/scaffold-upgrade.json`.
+- The pinned Python 3.12 code-graph runtime is refreshed as part of the safe lane.
 
-- Contract: `.code-factory.yaml`
-- Schema: `.code-factory.schema.json`
-- Preflight gate: `scripts/preflight.sh`
-- CI workflow: `.github/workflows/code-factory-preflight-gate.yml`
-- Contract validator: `scripts/validate_contract.py`
-- Example queue: `tasks/tasks.json`
-- Operations runbook: `docs/code-factory-operations.md`
+## Default Environment
 
-### Loop behavior
+- `CLOUD_ONLY=true`
+- `LLM_ARCH_BASE_URL=http://127.0.0.1:8000`
+- `SIGNAL_ENABLED=true`
+- `SIGNAL_API_URL=http://127.0.0.1:8080`
+- `ORACLE_API_KEY` required
 
-The loop runs this sequence per task:
+`OLLAMA_BASE_URL` is no longer part of the default deploy contract. Local Ollama remains optional future capability only when `CLOUD_ONLY=false`.
 
-1. Claim next pending task from `tasks/tasks.json`
-2. Run implementation command
-3. Run deterministic preflight gate
-4. Run reviewer sub-agent decision
-5. Record ship result and update contract merge history
-6. Emit heartbeat and trace to:
-- `logs/session.jsonl`
-- `logs/factory-trace.sqlite`
+## Legacy Scope
 
-### Start the autonomous loop
-
-```bash
-make factory-loop
-```
-
-or directly:
-
-```bash
-cd infra
-python3 -m src.agents.factory_loop --tasks ../tasks/tasks.json
-```
-
-### Run gate manually
-
-```bash
-./scripts/preflight.sh
-./scripts/preflight.sh infra/src/agents/workflows.py
-```
-
-### Operational overrides
-
-```bash
-CODE_FACTORY_SHIP_MODE_OVERRIDE=report_only make factory-loop
-touch .pause-autonomous
-```
+OpenClaw-specific configs and guides remain only for compatibility history and archive review. Do not use them as live deployment instructions.

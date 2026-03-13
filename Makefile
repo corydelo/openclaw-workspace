@@ -1,4 +1,4 @@
-.PHONY: sync status up down smoke contract-test e2e infra-up infra-down agent-up agent-down prepare submodule-check agent-drift-check venice-models preflight factory-loop secret-guard
+.PHONY: sync status up down smoke contract-test e2e infra-up infra-down agent-up agent-down prepare upgrade submodule-check agent-drift-check venice-models preflight factory-loop secret-guard
 
 SHELL := /bin/bash
 
@@ -26,6 +26,9 @@ agent-down:
 
 prepare:
 	bash ./bootstrap.sh prepare
+
+upgrade:
+	bash ./bootstrap.sh upgrade
 
 submodule-check:
 	@bad="$$(git submodule status --recursive | grep -E '^[+-U]' || true)"; \

@@ -155,11 +155,21 @@ def test_signal_health():
     check("Signal /v1/health reachable (200/204)", ok)
 
 
+def test_signal_adapter():
+    print("\n[4] Oracle signal adapter")
+    ok = wait_for_health(f"{ORACLE_BASE_URL}/api/v1/signal/status", timeout=30, allowed_statuses={200})
+    check("Oracle /api/v1/signal/status reachable", ok)
+    if ok:
+        _, data = request_json("GET", f"{ORACLE_BASE_URL}/api/v1/signal/status", timeout=10)
+        check("Signal status payload is JSON object", isinstance(data, dict))
+
+
 if __name__ == "__main__":
     print("=== Codex E2E Smoke Test ===")
     test_oracle_health()
     test_oracle_chat()
     test_signal_health()
+    test_signal_adapter()
 
     print(f"\n{'='*30}")
     if errors:
