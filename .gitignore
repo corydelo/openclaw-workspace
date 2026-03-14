@@ -18,3 +18,10 @@ k8s-deferred-20260222/04-secrets.yaml
 
 # Worktrees — local developer checkout directories, never tracked
 .worktrees/
+
+# Claude Code worktrees — session-scoped isolated checkouts, never tracked
+# These live under .claude/worktrees/ and must never enter the git index.
+# Without this rule each Claude session leaks a gitlink (mode 160000) into
+# the index, causing `git submodule sync` in bootstrap.sh to fail fatally.
+.claude/worktrees/
+.claude/settings.local.json
