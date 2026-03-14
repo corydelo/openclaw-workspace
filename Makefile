@@ -1,4 +1,4 @@
-.PHONY: sync status up down smoke contract-test e2e infra-up infra-down agent-up agent-down prepare upgrade submodule-check agent-drift-check venice-models preflight factory-loop secret-guard research-eval research-run
+.PHONY: sync status up down smoke contract-test e2e infra-up infra-down agent-up agent-down prepare upgrade submodule-check agent-drift-check venice-models preflight factory-loop secret-guard research-eval research-run worktree-prune worktree-prune-all
 
 SHELL := /bin/bash
 
@@ -97,3 +97,14 @@ research-eval:
 
 research-run:
 	cd infra && ROUNDS=$${ROUNDS:-20} EVAL_WAIT=$${EVAL_WAIT:-300} bash ../../skills/autoresearch/research-loop.sh
+
+# --- Worktree hygiene ---
+# Dry-run: show worktrees with a .merged marker that are safe to remove
+worktree-prune:
+	bash ../../scripts/prune-worktrees.sh
+	cd infra && bash ../../../scripts/prune-worktrees.sh
+
+# Apply: actually delete marked worktrees in both this repo and infra submodule
+worktree-prune-all:
+	bash ../../scripts/prune-worktrees.sh --apply
+	cd infra && bash ../../../scripts/prune-worktrees.sh --apply
