@@ -1,4 +1,4 @@
-.PHONY: sync status up down smoke contract-test e2e infra-up infra-down agent-up agent-down prepare upgrade submodule-check agent-drift-check venice-models preflight factory-loop secret-guard
+.PHONY: sync status up down smoke contract-test e2e infra-up infra-down agent-up agent-down prepare upgrade submodule-check agent-drift-check venice-models preflight factory-loop secret-guard research-eval research-run
 
 SHELL := /bin/bash
 
@@ -90,3 +90,10 @@ factory-loop:
 
 secret-guard:
 	python3 scripts/plaintext_secret_guard.py
+
+# --- Autoresearch ---
+research-eval:
+	cd infra && python3 ../../skills/autoresearch/evaluate.py
+
+research-run:
+	cd infra && ROUNDS=$${ROUNDS:-20} EVAL_WAIT=$${EVAL_WAIT:-300} bash ../../skills/autoresearch/research-loop.sh
