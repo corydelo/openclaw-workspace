@@ -9,6 +9,7 @@ INFRA_ENV="$INFRA_DIR/.env"
 AGENT_ENV="$AGENT_DIR/config/.env"
 AGENT_ENV_EXAMPLE="$AGENT_DIR/config/.env.example"
 SCAFFOLD_UPGRADE_SCRIPT="$ROOT_DIR/scripts/scaffold_upgrade.py"
+SECRET_HELPER="$ROOT_DIR/scripts/secret_bundle.sh"
 DEFAULT_DATA_ROOT="$ROOT_DIR/.openclaw_data"
 if [[ -x "$INFRA_DIR/venv/bin/python" ]]; then
   INFRA_VENV="$INFRA_DIR/venv"
@@ -19,6 +20,75 @@ else
 fi
 INFRA_PID_FILE="$ROOT_DIR/.infra.pid"
 INFRA_LOG_FILE="$ROOT_DIR/.infra.log"
+
+bootstrap_tmp_dir() {
+  export TMPDIR="$ROOT_DIR/.tmp"
+  mkdir -p "$TMPDIR"
+}
+
+ensure_secret_tooling() {
+  [[ -x "$SECRET_HELPER" ]] || die "missing secret helper: $SECRET_HELPER"
+}
+
+ensure_secret_bundle() {
+  ensure_secret_tooling
+  [[ -f "${OPENCLAW_SECRET_BUNDLE:-$ROOT_DIR/secrets/codex.env.age}" ]] || die \
+    "missing encrypted secret bundle; run '$ROOT_DIR/bootstrap.sh seal-secrets' first"
+  command -v age >/dev/null 2>&1 || die "age is required to decrypt the secret bundle"
+}
+
+render_runtime_env() {
+  local target="$1"
+  local output_path="$2"
+  ensure_secret_bundle
+  bootstrap_tmp_dir
+  "$SECRET_HELPER" render-env "$target" "$output_path"
+}
+
+load_rendered_env() {
+  local target="$1"
+  ensure_secret_bundle
+  bootstrap_tmp_dir
+  # shellcheck disable=SC1090
+  source <("$SECRET_HELPER" render-shell "$target")
+}
+
+with_rendered_env_pipe() {
+  local target="$1"
+  shift
+  local fifo
+  local render_pid
+  local status
+
+  ensure_secret_bundle
+  bootstrap_tmp_dir
+  fifo="$(mktemp -u "$TMPDIR/${target}.env.XXXXXX")"
+  mkfifo "$fifo"
+  "$SECRET_HELPER" render-env "$target" >"$fifo" &
+  render_pid=$!
+  "$@" "$fifo"
+  status=$?
+  wait "$render_pid"
+  rm -f "$fifo"
+  return "$status"
+}
+
+seal_secrets() {
+  ensure_secret_tooling
+  bootstrap_tmp_dir
+  "$SECRET_HELPER" seal
+}
+
+rotate_owned_keys() {
+  ensure_secret_tooling
+  bootstrap_tmp_dir
+  "$SECRET_HELPER" rotate-owned
+}
+
+die() {
+  echo "ERROR: $*" >&2
+  exit 1
+}
 
 pid_is_running() {
   local pid="$1"
