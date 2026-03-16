@@ -203,15 +203,190 @@ adopt_env_value() {
 }
 
 ensure_root_env() {
-  load_rendered_env root
+  mkdir -p "$ROOT_DIR"
+  if [[ ! -f "$ROOT_ENV" ]]; then
+    touch "$ROOT_ENV"
+  fi
+
+  export TMPDIR="$PWD/.tmp"
+  mkdir -p "$TMPDIR"
+  # shellcheck disable=SC1090
+  set -a && source "$ROOT_ENV" && set +a
+
+  local inherited_keys=(
+    "OPENROUTER_API_KEY"
+    "GROQ_API_KEY"
+    "OPENAI_API_KEY"
+    "ANTHROPIC_API_KEY"
+    "SIGNAL_ENABLED"
+    "SIGNAL_NUMBER"
+    "SIGNAL_API_URL"
+    "SIGNAL_WHITELIST"
+  )
+  local inherited_key
+  for inherited_key in "${inherited_keys[@]}"; do
+    adopt_env_value "$AGENT_ENV" "$inherited_key"
+  done
+  if [[ -z "${SIGNAL_WHITELIST:-}" ]]; then
+    SIGNAL_WHITELIST="$(env_file_value "$AGENT_ENV" "SIGNAL_ALLOWED_NUMBERS")"
+    if [[ -n "${SIGNAL_WHITELIST:-}" ]]; then
+      export SIGNAL_WHITELIST
+    fi
+  fi
+
+  if [[ -z "${ORACLE_API_KEY:-}" ]]; then
+    ORACLE_API_KEY="$(generate_oracle_key)"
+    upsert_env "$ROOT_ENV" "ORACLE_API_KEY" "$ORACLE_API_KEY"
+  fi
+  if [[ -z "${LLM_ARCH_BASE_URL:-}" ]]; then
+    LLM_ARCH_BASE_URL="http://127.0.0.1:8000"
+    upsert_env "$ROOT_ENV" "LLM_ARCH_BASE_URL" "$LLM_ARCH_BASE_URL"
+  fi
+  if [[ -z "${CLOUD_ONLY:-}" ]]; then
+    CLOUD_ONLY="true"
+    upsert_env "$ROOT_ENV" "CLOUD_ONLY" "$CLOUD_ONLY"
+  fi
+  if [[ -z "${OPENCLAW_DATA_DIR:-}" ]]; then
+    OPENCLAW_DATA_DIR="$DEFAULT_DATA_ROOT"
+    upsert_env "$ROOT_ENV" "OPENCLAW_DATA_DIR" "$OPENCLAW_DATA_DIR"
+  fi
+  if [[ -z "${WORKFLOW_APPROVAL_MODE:-}" ]]; then
+    WORKFLOW_APPROVAL_MODE="on-risk"
+    upsert_env "$ROOT_ENV" "WORKFLOW_APPROVAL_MODE" "$WORKFLOW_APPROVAL_MODE"
+  fi
+  if [[ -z "${WORKFLOW_TOKEN_BUDGET:-}" ]]; then
+    WORKFLOW_TOKEN_BUDGET="6000"
+    upsert_env "$ROOT_ENV" "WORKFLOW_TOKEN_BUDGET" "$WORKFLOW_TOKEN_BUDGET"
+  fi
+  if [[ -n "${SIGNAL_NUMBER:-}" ]]; then
+    if [[ -z "${SIGNAL_ENABLED:-}" ]]; then
+      SIGNAL_ENABLED="true"
+      export SIGNAL_ENABLED
+    fi
+    if [[ -z "${SIGNAL_API_URL:-}" ]]; then
+      SIGNAL_API_URL="http://127.0.0.1:8080"
+      export SIGNAL_API_URL
+    fi
+  fi
+
+  local mirrored_keys=(
+    "OPENROUTER_API_KEY"
+    "GROQ_API_KEY"
+    "OPENAI_API_KEY"
+    "ANTHROPIC_API_KEY"
+    "SIGNAL_ENABLED"
+    "SIGNAL_NUMBER"
+    "SIGNAL_API_URL"
+    "SIGNAL_WHITELIST"
+  )
+  local mirrored_key
+  for mirrored_key in "${mirrored_keys[@]}"; do
+    if [[ -n "${!mirrored_key:-}" ]]; then
+      upsert_env "$ROOT_ENV" "$mirrored_key" "${!mirrored_key}"
+    fi
+  done
 }
 
 ensure_infra_env() {
-  ensure_secret_bundle
+  touch "$INFRA_ENV"
+  local cloud_only="${CLOUD_ONLY:-true}"
+  upsert_env "$INFRA_ENV" "API_KEYS" "${ORACLE_API_KEY}"
+  upsert_env "$INFRA_ENV" "API_AUTH_MODE" "${API_AUTH_MODE:-required}"
+  upsert_env "$INFRA_ENV" "API_AUTH_ALLOW_EMPTY_KEYS" "${API_AUTH_ALLOW_EMPTY_KEYS:-false}"
+  upsert_env "$INFRA_ENV" "WORKFLOW_APPROVAL_MODE" "${WORKFLOW_APPROVAL_MODE:-on-risk}"
+  upsert_env "$INFRA_ENV" "WORKFLOW_TOKEN_BUDGET" "${WORKFLOW_TOKEN_BUDGET:-6000}"
+  upsert_env "$INFRA_ENV" "CLOUD_ONLY" "$cloud_only"
+  if truthy "$cloud_only"; then
+    remove_env_key "$INFRA_ENV" "OLLAMA_BASE_URL"
+  elif [[ -n "${OLLAMA_BASE_URL:-}" ]]; then
+    upsert_env "$INFRA_ENV" "OLLAMA_BASE_URL" "$OLLAMA_BASE_URL"
+  fi
+  if [[ -n "${OPENCLAW_DATA_DIR:-}" ]]; then
+    upsert_env "$INFRA_ENV" "OPENCLAW_DATA_DIR" "$OPENCLAW_DATA_DIR"
+  fi
+
+  local provider_keys=(
+    "OPENROUTER_API_KEY"
+    "GROQ_API_KEY"
+    "OPENAI_API_KEY"
+    "ANTHROPIC_API_KEY"
+  )
+  local provider_key
+  for provider_key in "${provider_keys[@]}"; do
+    adopt_env_value "$AGENT_ENV" "$provider_key"
+    if [[ -n "${!provider_key:-}" ]]; then
+      upsert_env "$INFRA_ENV" "$provider_key" "${!provider_key}"
+    fi
+  done
+
+  local signal_number="${SIGNAL_NUMBER:-}"
+  local signal_whitelist="${SIGNAL_WHITELIST:-${SIGNAL_ALLOWED_NUMBERS:-}}"
+  if [[ -z "$signal_number" && -f "$AGENT_ENV" ]]; then
+    signal_number="$(awk -F= '/^SIGNAL_NUMBER=/{print $2}' "$AGENT_ENV" | tail -n 1 || true)"
+  fi
+  if [[ -z "$signal_whitelist" && -f "$AGENT_ENV" ]]; then
+    signal_whitelist="$(awk -F= '/^SIGNAL_ALLOWED_NUMBERS=/{print $2}' "$AGENT_ENV" | tail -n 1 || true)"
+  fi
+  if [[ -n "$signal_number" ]]; then
+    upsert_env "$INFRA_ENV" "SIGNAL_ENABLED" "${SIGNAL_ENABLED:-true}"
+    upsert_env "$INFRA_ENV" "SIGNAL_NUMBER" "$signal_number"
+    upsert_env "$INFRA_ENV" "SIGNAL_API_URL" "${SIGNAL_API_URL:-http://127.0.0.1:8080}"
+  fi
+  if [[ -n "$signal_whitelist" ]]; then
+    upsert_env "$INFRA_ENV" "SIGNAL_WHITELIST" "$signal_whitelist"
+  fi
+
+  # Optional Venice routing settings: if set in root env or shell, propagate
+  # to infra/.env so router + provider share one source of truth.
+  local venice_keys=(
+    "VENICE_API_KEY"
+    "VENICE_DIEM_STAKE"
+    "VENICE_CHEAP_MODEL"
+    "VENICE_BASE_MODEL"
+    "VENICE_FRONTIER_MODEL"
+    "VENICE_FRONTIER_REASONING_MODEL"
+    "VENICE_FRONTIER_CODING_MODEL"
+    "VENICE_API_BASE_URL"
+    "VENICE_BURN_ENABLED"
+    "VENICE_DAILY_TOKEN_BUDGET"
+    "VENICE_BURN_RESERVE_TOKENS"
+    "VENICE_RESET_HOUR_LOCAL"
+    "VENICE_BURN_FORCE_PROFILE"
+    "VENICE_BURN_FALLBACK_PROFILE"
+    "VENICE_BURN_STATE_FILE"
+  )
+  local venice_key
+  for venice_key in "${venice_keys[@]}"; do
+    if [[ -n "${!venice_key:-}" ]]; then
+      upsert_env "$INFRA_ENV" "$venice_key" "${!venice_key}"
+    fi
+  done
 }
 
 ensure_agent_env() {
-  ensure_secret_bundle
+  if [[ ! -f "$AGENT_ENV" ]]; then
+    if [[ ! -f "$AGENT_ENV_EXAMPLE" ]]; then
+      echo "ERROR: missing $AGENT_ENV_EXAMPLE" >&2
+      exit 1
+    fi
+    cp "$AGENT_ENV_EXAMPLE" "$AGENT_ENV"
+    echo "Created $AGENT_ENV from template"
+  fi
+
+  local gateway_token
+  gateway_token="$(awk -F= '/^GATEWAY_TOKEN=/{print $2}' "$AGENT_ENV" | tail -n 1 || true)"
+  if [[ -z "$gateway_token" || "$gateway_token" == "your_secure_random_token_here" ]]; then
+    if command -v openssl >/dev/null 2>&1; then
+      gateway_token="$(openssl rand -hex 32)"
+    else
+      gateway_token="$(date +%s)_$(od -An -N8 -tx1 /dev/urandom | tr -d ' \n')"
+    fi
+    upsert_env "$AGENT_ENV" "GATEWAY_TOKEN" "$gateway_token"
+  fi
+
+  upsert_env "$AGENT_ENV" "ORACLE_API_KEY" "${ORACLE_API_KEY}"
+  upsert_env "$AGENT_ENV" "ORACLE_BASE_URL" "${LLM_ARCH_BASE_URL}/v1"
+  chmod 600 "$AGENT_ENV"
 }
 
 sync_submodules() {
@@ -381,7 +556,7 @@ start_infra() {
   launched_pid="$(
     cd "$INFRA_DIR"
     # shellcheck disable=SC1090
-    source <("$SECRET_HELPER" render-shell infra)
+    set -a && source "$INFRA_ENV" && set +a
     mkdir -p "${OPENCLAW_DATA_DIR:-$DEFAULT_DATA_ROOT}"
     launch_detached_infra "$INFRA_VENV/bin/uvicorn"
   )"
@@ -460,25 +635,21 @@ stop_infra() {
 start_agent() {
   local compose
   compose="$(compose_cmd)"
-  with_rendered_env_pipe agent bash -lc '
-    compose="$1"
-    env_file="$2"
-    cd "'"$AGENT_DIR"'/docker"
+  (
+    cd "$AGENT_DIR/docker"
     # shellcheck disable=SC2086
-    $compose --env-file "$env_file" -f docker-compose.yml up -d --remove-orphans
-  ' _ "$compose"
+    $compose --env-file ../config/.env -f docker-compose.yml up -d --remove-orphans
+  )
 }
 
 stop_agent() {
   local compose
   compose="$(compose_cmd)"
-  with_rendered_env_pipe agent bash -lc '
-    compose="$1"
-    env_file="$2"
-    cd "'"$AGENT_DIR"'/docker"
+  (
+    cd "$AGENT_DIR/docker"
     # shellcheck disable=SC2086
-    $compose --env-file "$env_file" -f docker-compose.yml down --remove-orphans
-  ' _ "$compose"
+    $compose --env-file ../config/.env -f docker-compose.yml down --remove-orphans
+  )
 }
 
 run_contract_test() {
@@ -579,14 +750,6 @@ shift || true
 case "$action" in
   prepare) prepare ;;
   upgrade) run_upgrade "$@" ;;
-  render-runtime-env)
-    target="${1:-}"
-    output_path="${2:-}"
-    [[ -n "$target" && -n "$output_path" ]] || die "Usage: $0 render-runtime-env <target> <output-path>"
-    render_runtime_env "$target" "$output_path"
-    ;;
-  seal-secrets) seal_secrets ;;
-  rotate-keys) rotate_owned_keys ;;
   infra-up) prepare; start_infra ;;
   infra-down) stop_infra ;;
   agent-up) prepare; start_agent ;;
@@ -596,7 +759,7 @@ case "$action" in
   up) up_all ;;
   down) down_all ;;
   *)
-    echo "Usage: $0 {prepare|upgrade [--check] [--approve] [--lane <name>]|render-runtime-env <target> <output>|seal-secrets|rotate-keys|infra-up|infra-down|agent-up|agent-down|contract-test|smoke|up|down}" >&2
+    echo "Usage: $0 {prepare|upgrade [--check] [--approve] [--lane <name>]|infra-up|infra-down|agent-up|agent-down|contract-test|smoke|up|down}" >&2
     exit 1
     ;;
 esac

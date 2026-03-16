@@ -1,4 +1,4 @@
-.PHONY: sync status up down smoke contract-test e2e infra-up infra-down agent-up agent-down prepare upgrade submodule-check agent-drift-check venice-models preflight factory-loop secret-guard research-eval research-run worktree-prune worktree-prune-all
+.PHONY: sync status up down smoke contract-test e2e infra-up infra-down agent-up agent-down prepare upgrade submodule-check agent-drift-check venice-models preflight factory-loop secret-guard seal-secrets rotate-keys research-eval research-run worktree-prune worktree-prune-all
 
 SHELL := /bin/bash
 
@@ -26,6 +26,12 @@ agent-down:
 
 prepare:
 	bash ./bootstrap.sh prepare
+
+seal-secrets:
+	bash ./bootstrap.sh seal-secrets
+
+rotate-keys:
+	bash ./bootstrap.sh rotate-keys
 
 upgrade:
 	bash ./bootstrap.sh upgrade
