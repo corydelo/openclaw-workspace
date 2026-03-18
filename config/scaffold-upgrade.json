@@ -22,8 +22,8 @@
     },
     "code_graph_runtime": {
       "kind": "python_venv",
-      "description": "Refresh the pinned Python 3.12 code-graph runtime",
-      "venv_path": "infra/venv-py312",
+      "description": "Refresh the code-graph runtime (consolidated venv)",
+      "venv_path": "infra/venv",
       "requirements": "infra/requirements.txt",
       "python_version_file": "infra/.python-version",
       "approval_required": true
